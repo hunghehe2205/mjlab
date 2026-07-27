@@ -110,6 +110,15 @@ def yam_lift_cube_vision_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
   )
 
 
+def yam_lift_cube_rgbd_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
+  # RGB+D reuses the vision runner verbatim (same CNN, hyperparameters, and the
+  # vision training fix); only the experiment name differs so its logs and
+  # checkpoints land in a separate directory.
+  cfg = yam_lift_cube_vision_ppo_runner_cfg()
+  cfg.experiment_name = "yam_lift_cube_rgbd"
+  return cfg
+
+
 def yam_multi_cube_seg_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
   return RslRlOnPolicyRunnerCfg(
     actor=RslRlModelCfg(

@@ -91,7 +91,7 @@ def yam_lift_cube_env_cfg(
 
 
 def yam_lift_cube_vision_env_cfg(
-  cam_type: Literal["rgb", "depth"],
+  cam_type: Literal["rgb", "depth", "rgbd"],
   play: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   cfg = yam_lift_cube_env_cfg(play=play)
@@ -113,45 +113,47 @@ def yam_lift_cube_vision_env_cfg(
       {"step": 4000 * 24, "weight": -1.0},
     ]
 
-  camera_names = ["robot/camera_d405"]
-  cam_kwargs = {
-    "robot/camera_d405": {
-      "height": 32,
-      "width": 32,
-    },
-  }
-  shared_cam_kwargs = dict(
-    data_types=(cam_type,),
+  # RGB+D stacks rgb (3ch) and depth (1ch) into a single 4-channel image (early
+  # fusion); rgb and depth stay single-channel. All modalities render from one
+  # camera sensor.
+  data_types = ("rgb", "depth") if cam_type == "rgbd" else (cam_type,)
+
+  cam_name = "robot/camera_d405"
+  sensor_name = cam_name.split("/")[-1]
+  cam_cfg = CameraSensorCfg(
+    name=sensor_name,
+    camera_name=cam_name,
+    height=32,
+    width=32,
+    data_types=data_types,
     enabled_geom_groups=(0, 3),
     use_shadows=False,
     use_textures=True,
   )
+  cfg.scene.sensors = (cfg.scene.sensors or ()) + (cam_cfg,)
 
   cam_terms = {}
-  for cam_name in camera_names:
-    cam_cfg = CameraSensorCfg(
-      name=cam_name.split("/")[-1],
-      camera_name=cam_name,
-      **cam_kwargs[cam_name],  # type: ignore[invalid-argument-type]
-      **shared_cam_kwargs,
-    )
-    cfg.scene.sensors = (cfg.scene.sensors or ()) + (cam_cfg,)
-    param_kwargs: dict[str, Any] = {"sensor_name": cam_cfg.name}
-    if cam_type == "depth":
-      param_kwargs["cutoff_distance"] = 0.5
+  for data_type in data_types:
+    params: dict[str, Any] = {"sensor_name": sensor_name}
+    if data_type == "depth":
+      params["cutoff_distance"] = 0.5
       func = manipulation_mdp.camera_depth
     else:
       func = manipulation_mdp.camera_rgb
-    cam_terms[f"{cam_name.split('/')[-1]}_{cam_type}"] = ObservationTermCfg(
-      func=func, params=param_kwargs
+    cam_terms[f"{sensor_name}_{data_type}"] = ObservationTermCfg(
+      func=func, params=params
     )
 
-  camera_obs = ObservationGroupCfg(
-    terms=cam_terms, enable_corruption=False, concatenate_terms=True
+  # concatenate_dim=0 stacks terms on the channel axis -> (B, C, H, W). Only rgbd
+  # has multiple terms; rgb/depth keep the single-term default (a no-op).
+  cfg.observations["camera"] = ObservationGroupCfg(
+    terms=cam_terms,
+    enable_corruption=False,
+    concatenate_terms=True,
+    concatenate_dim=0 if len(data_types) > 1 else -1,
   )
-  cfg.observations["camera"] = camera_obs
 
-  if cam_type == "rgb":
+  if "rgb" in data_types:
     cfg.events["cube_color"] = EventTermCfg(
       func=dr.geom_rgba,
       mode="reset",
