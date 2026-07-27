@@ -106,12 +106,25 @@ def yam_lift_cube_vision_env_cfg(
   # clamping joint motion there traps it in the reach-only optimum and it never
   # discovers the lift. Push the stages to 2000/4000 to keep the exploration
   # window open until the lift is found. Guarded because play zeroes curriculum.
+  #
+  # Softened final stage: the original -1.0 clamp (firing at iteration 4000)
+  # over-penalized the vigorous joint motion a lift inherently needs, so the
+  # policy went timid and task metrics regressed after 4000 (episode_success
+  # ~0.80 -> ~0.65, position_error ~0.08 -> ~0.13) while only marginally
+  # improving action_rate. Smoothness was NOT free to add on top of a solved
+  # policy. Drop the final weight to -0.3 and raise max_vel to 0.8 below so the
+  # penalty targets only genuinely excessive velocities and no longer erodes the
+  # lift.
   if "joint_vel_hinge_weight" in cfg.curriculum:
     cfg.curriculum["joint_vel_hinge_weight"].params["stages"] = [
       {"step": 0, "weight": -0.01},
       {"step": 2000 * 24, "weight": -0.1},
-      {"step": 4000 * 24, "weight": -1.0},
+      {"step": 4000 * 24, "weight": -0.3},
     ]
+
+  # Only penalize joint velocities above 0.8 (base task uses 0.5). Lifting needs
+  # brisk motion; a 0.5 threshold flags normal grasp/lift moves as "too fast".
+  cfg.rewards["joint_vel_hinge"].params["max_vel"] = 0.8
 
   # RGB+D stacks rgb (3ch) and depth (1ch) into a single 4-channel image (early
   # fusion); rgb and depth stay single-channel. All modalities render from one
