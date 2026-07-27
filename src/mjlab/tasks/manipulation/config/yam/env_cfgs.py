@@ -96,6 +96,23 @@ def yam_lift_cube_vision_env_cfg(
 ) -> ManagerBasedRlEnvCfg:
   cfg = yam_lift_cube_env_cfg(play=play)
 
+  # Delay the joint-velocity-hinge curriculum for the vision task.
+  #
+  # The base config ramps this penalty at iterations 500/1000 (12000/24000
+  # steps). That schedule is tuned for the state-based policy, which is fed the
+  # cube pose directly and breaks out of the reach-only plateau around iteration
+  # 250 -- well before the clamp. The vision policy must first learn to localize
+  # the cube from a 32x32 image, so at iteration 500 it is still exploring;
+  # clamping joint motion there traps it in the reach-only optimum and it never
+  # discovers the lift. Push the stages to 2000/4000 to keep the exploration
+  # window open until the lift is found. Guarded because play zeroes curriculum.
+  if "joint_vel_hinge_weight" in cfg.curriculum:
+    cfg.curriculum["joint_vel_hinge_weight"].params["stages"] = [
+      {"step": 0, "weight": -0.01},
+      {"step": 2000 * 24, "weight": -0.1},
+      {"step": 4000 * 24, "weight": -1.0},
+    ]
+
   camera_names = ["robot/camera_d405"]
   cam_kwargs = {
     "robot/camera_d405": {

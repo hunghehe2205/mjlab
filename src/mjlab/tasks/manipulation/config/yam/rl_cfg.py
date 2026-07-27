@@ -83,7 +83,11 @@ def yam_lift_cube_vision_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
       value_loss_coef=1.0,
       use_clipped_value_loss=True,
       clip_param=0.2,
-      entropy_coef=0.005,
+      # Raised from 0.005 (the state-based default) to keep exploration alive
+      # longer. From pixels the policy is slow to discover the grasp-and-lift,
+      # and the default entropy lets the action std collapse into the reach-only
+      # optimum before it gets there.
+      entropy_coef=0.01,
       num_learning_epochs=5,
       num_mini_batches=4,
       learning_rate=1.0e-3,
@@ -96,7 +100,9 @@ def yam_lift_cube_vision_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
     experiment_name="yam_lift_cube_vision",
     save_interval=100,
     num_steps_per_env=24,
-    max_iterations=3_000,
+    # Raised from 3000 so the delayed joint_vel_hinge curriculum's final stage
+    # (iteration 4000) fires, leaving ~1000 iterations to converge under it.
+    max_iterations=5_000,
     obs_groups={
       "actor": ("actor", "camera"),
       "critic": ("critic", "camera"),
