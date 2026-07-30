@@ -972,6 +972,12 @@ def _make_cam_light_env(device, num_envs=NUM_ENVS):
       "cam_intrinsic",
       "light_pos",
       "light_dir",
+      "light_diffuse",
+      "light_specular",
+      "light_ambient",
+      "light_attenuation",
+      "light_cutoff",
+      "light_exponent",
     ),
   )
 
@@ -1093,6 +1099,70 @@ def test_light_dir_add(cam_light_env):
     lo = default_dir[..., ax] - 0.5 - 1e-5
     hi = default_dir[..., ax] + 0.5 + 1e-5
     assert torch.all((result[..., ax] >= lo) & (result[..., ax] <= hi))
+
+
+@pytest.mark.parametrize(
+  ("func_name", "field", "ranges"),
+  [
+    ("light_diffuse", "light_diffuse", (0.2, 0.8)),
+    ("light_specular", "light_specular", (0.0, 1.0)),
+    ("light_ambient", "light_ambient", (0.1, 0.5)),
+    ("light_attenuation", "light_attenuation", (0.0, 1.0)),
+  ],
+)
+def test_light_vec3_fields_abs(cam_light_env, func_name, field, ranges):
+  """Vec3 light fields randomize per selected light."""
+  torch.manual_seed(42)
+  env = cam_light_env
+  robot = env.scene["robot"]
+  light_cfg = SceneEntityCfg("robot", light_names=(".*",))
+  light_cfg.resolve(env.scene)
+  light_ids = robot.indexing.light_ids[light_cfg.light_ids]
+  func = getattr(dr, func_name)
+
+  func(
+    env,
+    env_ids=None,
+    ranges=ranges,
+    operation="abs",
+    asset_cfg=light_cfg,
+  )
+
+  values = getattr(env.sim.model, field)[:, light_ids, :]
+  lower, upper = ranges
+  assert torch.all((values >= lower - 1e-5) & (values <= upper + 1e-5))
+  assert len(torch.unique(values[:, 0, 0])) >= 2
+
+
+@pytest.mark.parametrize(
+  ("func_name", "field", "ranges"),
+  [
+    ("light_cutoff", "light_cutoff", (20.0, 60.0)),
+    ("light_exponent", "light_exponent", (1.0, 20.0)),
+  ],
+)
+def test_light_scalar_fields_abs(cam_light_env, func_name, field, ranges):
+  """Scalar light fields randomize per selected light."""
+  torch.manual_seed(42)
+  env = cam_light_env
+  robot = env.scene["robot"]
+  light_cfg = SceneEntityCfg("robot", light_names=(".*",))
+  light_cfg.resolve(env.scene)
+  light_ids = robot.indexing.light_ids[light_cfg.light_ids]
+  func = getattr(dr, func_name)
+
+  func(
+    env,
+    env_ids=None,
+    ranges=ranges,
+    operation="abs",
+    asset_cfg=light_cfg,
+  )
+
+  values = getattr(env.sim.model, field)[:, light_ids]
+  lower, upper = ranges
+  assert torch.all((values >= lower - 1e-5) & (values <= upper + 1e-5))
+  assert len(torch.unique(values[:, 0])) >= 2
 
 
 def test_camera_partial_env_ids(cam_light_env):
