@@ -21,7 +21,17 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import CameraSensorCfg, ContactSensorCfg
 from mjlab.tasks.manipulation import mdp as manipulation_mdp
 from mjlab.tasks.manipulation.lift_cube_env_cfg import make_lift_cube_env_cfg
-from mjlab.tasks.manipulation.mdp import MultiCubeLiftingCommandCfg
+from mjlab.tasks.manipulation.mdp import (
+  MultiCubeLiftingCommandCfg,
+  PickPlaceCommandCfg,
+)
+from mjlab.tasks.manipulation.pick_place_env_cfg import (
+  COMMAND_NAME as PICK_PLACE_COMMAND,
+)
+from mjlab.tasks.manipulation.pick_place_env_cfg import (
+  GRASP_SENSOR,
+  make_pick_place_env_cfg,
+)
 
 
 def get_cube_spec(
@@ -86,6 +96,73 @@ def yam_lift_cube_env_cfg(
     # Higher command resampling frequency for more dynamic play.
     assert cfg.commands is not None
     cfg.commands["lift_height"].resampling_time_range = (4.0, 4.0)
+
+  return cfg
+
+
+def yam_pick_place_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+  """Pick a cube off the floor and place it at a floor goal, YAM arm."""
+  cfg = make_pick_place_env_cfg()
+
+  cfg.scene.entities = {
+    "robot": get_yam_robot_cfg(),
+    "cube": EntityCfg(spec_fn=get_cube_spec),
+  }
+
+  # The gripper stays inside the single 7-dim joint-position action rather than
+  # becoming a separate binary term. At the configured init_std of 1.0 the
+  # left_finger joint range spans only 0.457 sigma of the action, so 81.9% of
+  # samples already saturate fully open or fully closed -- the discretization a
+  # binary term would add is one the physics already performs. rsl_rl also ships
+  # no discrete distribution head, so a thresholded term would be a
+  # non-differentiable switch inside a policy gradient whose log-prob is still
+  # computed on the continuous pre-threshold variable.
+  joint_pos_action = cfg.actions["joint_pos"]
+  assert isinstance(joint_pos_action, JointPositionActionCfg)
+  joint_pos_action.scale = YAM_ACTION_SCALE
+
+  ee_site = ("grasp_site",)
+  cfg.observations["actor"].terms["ee_to_cube"].params["asset_cfg"].site_names = ee_site
+  cfg.rewards["reach"].params["asset_cfg"].site_names = ee_site
+  cfg.rewards["release"].params["asset_cfg"].site_names = ee_site
+
+  command = cfg.commands[PICK_PLACE_COMMAND]
+  assert isinstance(command, PickPlaceCommandCfg)
+  command.robot_cfg.site_names = ee_site
+  # `left_finger` is the only actuated gripper joint; `right_finger` mirrors it
+  # through an MJCF equality. Its position grows as the gripper opens, which is
+  # the direction `grasp_aperture_min` assumes.
+  command.gripper_cfg.joint_names = ("left_finger",)
+
+  fingertip_geoms = r"[lr]f_down(6|7|8|9|10|11)_collision"
+  cfg.events["fingertip_friction_slide"].params[
+    "asset_cfg"
+  ].geom_names = fingertip_geoms
+  cfg.events["fingertip_friction_spin"].params["asset_cfg"].geom_names = fingertip_geoms
+  cfg.events["fingertip_friction_roll"].params["asset_cfg"].geom_names = fingertip_geoms
+
+  assert cfg.scene.sensors is not None
+  for sensor in cfg.scene.sensors:
+    if not isinstance(sensor, ContactSensorCfg):
+      continue
+    if sensor.name == "ee_ground_collision":
+      sensor.primary.pattern = "link_6"
+    elif sensor.name == GRASP_SENSOR:
+      # The two fingertip bodies. Each carries five pad plates plus six 0.6 mm
+      # tip spheres; matching the bodies rather than the spheres is what keeps
+      # the signal alive for off-centre grasps carried by the upper pads.
+      sensor.primary.pattern = r"[lr]f_down"
+
+  cfg.viewer.body_name = "arm"
+
+  if play:
+    cfg.episode_length_s = int(1e9)
+    cfg.observations["actor"].enable_corruption = False
+    cfg.curriculum = {}
+    assert cfg.commands is not None
+    # Play resamples often so a watcher sees repeated attempts; training does
+    # not, because resampling teleports the cube.
+    cfg.commands[PICK_PLACE_COMMAND].resampling_time_range = (12.0, 12.0)
 
   return cfg
 

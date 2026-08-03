@@ -116,7 +116,14 @@ class MetricsManager(ManagerBase):
     for idx, key in enumerate(self._episode_sums):
       reduce = self._term_cfgs[idx].reduce
       if reduce == "max":
-        extras["Episode_Metrics/" + key] = torch.mean(self._episode_max[key][env_ids])
+        # An env reset before it ever stepped still holds the -inf sentinel, and
+        # a single such env poisons the mean for the whole batch. Treat it as 0,
+        # mirroring the zero-step guard the "mean" branch already applies below.
+        # Initializing the buffer to 0.0 instead would be wrong: it would clamp
+        # away genuine negative maxima.
+        peaks = self._episode_max[key][env_ids]
+        peaks = torch.where(counts > 0, peaks, torch.zeros_like(peaks))
+        extras["Episode_Metrics/" + key] = torch.mean(peaks)
         self._episode_max[key][env_ids] = float("-inf")
       elif reduce == "last":
         extras["Episode_Metrics/" + key] = torch.mean(self._step_values[env_ids, idx])
