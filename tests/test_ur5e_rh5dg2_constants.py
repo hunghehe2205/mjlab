@@ -98,3 +98,42 @@ def test_home_pose_is_collision_free(model: mujoco.MjModel) -> None:
   mujoco.mj_resetDataKeyframe(model, data, 0)
   mujoco.mj_forward(model, data)
   assert data.ncon == 0
+
+
+def test_grasp_center_site(model: mujoco.MjModel) -> None:
+  sid = mujoco.mj_name2id(
+    model, mujoco.mjtObj.mjOBJ_SITE, f"{c.HAND_PREFIX}{c.GRASP_CENTER_SITE}"
+  )
+  assert sid >= 0
+
+
+def test_fingertip_pads_have_collision(model: mujoco.MjModel) -> None:
+  pads = [
+    model.geom(i).name
+    for i in range(model.ngeom)
+    if model.geom(i).name.endswith("force_sensor_collision")
+  ]
+  # 5 fingertip pads + 1 palm pad.
+  assert len(pads) == 6
+  for i in range(model.ngeom):
+    if model.geom(i).name.endswith("force_sensor_collision"):
+      assert model.geom(i).group == 3  # collision class.
+
+
+def test_init_finger_pose_valid(model: mujoco.MjModel) -> None:
+  # Covers all 18 finger joints and stays within each joint range.
+  assert set(c.INIT_FINGER_POSE) == set(c.FINGER_JOINT_NAMES)
+  for name, val in c.INIT_FINGER_POSE.items():
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{c.HAND_PREFIX}{name}")
+    lo, hi = model.jnt_range[jid]
+    assert lo <= val <= hi, f"{name}={val} outside [{lo}, {hi}]"
+
+
+def test_init_finger_pose_is_self_collision_free(model: mujoco.MjModel) -> None:
+  data = mujoco.MjData(model)
+  mujoco.mj_resetDataKeyframe(model, data, 0)  # arm at home, fingers open.
+  for name, val in c.INIT_FINGER_POSE.items():
+    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{c.HAND_PREFIX}{name}")
+    data.qpos[model.jnt_qposadr[jid]] = val
+  mujoco.mj_forward(model, data)
+  assert data.ncon == 0

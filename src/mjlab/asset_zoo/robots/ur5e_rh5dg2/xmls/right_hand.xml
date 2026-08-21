@@ -59,6 +59,8 @@
         <geom name="R_hand_palm_collision_8" class="rh5dg2_hand_collision" size="0.011 0.041 0.047" pos="-0.005778 0 0.09736" type="box"/>
         <geom name="R_hand_palm_collision_9" class="rh5dg2_hand_collision" size="0.009 0.041 0.031" pos="-0.014854 0 0.09294" type="box"/>
         <geom name="R_hand_palm_collision_10" class="rh5dg2_hand_collision" size="0.009 0.029 0.019" pos="-0.015945 0 0.060691" type="box"/>
+        <!-- Grasp reference point (hand_center analog); refine in viewer. -->
+        <site name="grasp_center" pos="0.05 0 0.11" size="0.005" rgba="0 1 0 0.5" group="4"/>
         <body name="R_thumb_yaw" pos="0.021 0.021699 0.07225">
           <inertial pos="0.000852 0.004836 -0.005741" quat="0.701002146 0.706899147 -0.035054007 -0.087526018" mass="0.00481735" diaginertia="0.000000180572 0.00000016585 0.000000093259"/>
           <joint name="R_thumb_yaw_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.91986" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
@@ -86,6 +88,7 @@
                 <body name="R_thumb_force_sensor" pos="0.025343 0.007282 -0.008" quat="0.454598066 -0.541730079 -0.454403066 -0.541652079">
                   <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431614026 0.560279033 -0.560265033 0.431161026" mass="0.000821544" diaginertia="0.000000051789 0.000000039058 0.000000015269"/>
                   <geom name="R_thumb_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_thumb_force_sensor"/>
+                  <geom name="R_thumb_force_sensor_collision" class="rh5dg2_hand_collision" type="mesh" mesh="R_thumb_force_sensor"/>
                 </body>
               </body>
             </body>
@@ -120,6 +123,7 @@
                 <body name="R_index_force_sensor" pos="0.014134 0.029094 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
                   <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821523" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
                   <geom name="R_index_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_index_force_sensor"/>
+                  <geom name="R_index_force_sensor_collision" class="rh5dg2_hand_collision" type="mesh" mesh="R_index_force_sensor"/>
                 </body>
               </body>
             </body>
@@ -154,6 +158,7 @@
                 <body name="R_middle_force_sensor" pos="0.014553 0.03105 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
                   <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821524" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
                   <geom name="R_middle_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_middle_force_sensor"/>
+                  <geom name="R_middle_force_sensor_collision" class="rh5dg2_hand_collision" type="mesh" mesh="R_middle_force_sensor"/>
                 </body>
               </body>
             </body>
@@ -184,6 +189,7 @@
               <body name="R_ring_force_sensor" pos="0.014134 0.029094 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
                 <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821524" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
                 <geom name="R_ring_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_ring_force_sensor"/>
+                <geom name="R_ring_force_sensor_collision" class="rh5dg2_hand_collision" type="mesh" mesh="R_ring_force_sensor"/>
               </body>
             </body>
           </body>
@@ -213,6 +219,7 @@
               <body name="R_pinky_force_sensor" pos="0.013925 0.028117 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
                 <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821523" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
                 <geom name="R_pinky_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_pinky_force_sensor"/>
+              <geom name="R_pinky_force_sensor_collision" class="rh5dg2_hand_collision" type="mesh" mesh="R_pinky_force_sensor"/>
               </body>
             </body>
           </body>
@@ -220,6 +227,7 @@
         <body name="R_palm_force_sensor" pos="0.021234 0.000148 0.1121" quat="0.508715773 0.491076781 0.489132782 0.510686772">
           <inertial pos="0.00038 0.001479 -0.003456" quat="0.002268999 0.709136712 0.015691994 0.704892713" mass="0.00510274" diaginertia="0.00000192364 0.0000015414 0.000000417373"/>
           <geom name="R_palm_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_palm_force_sensor"/>
+        <geom name="R_palm_force_sensor_collision" class="rh5dg2_hand_collision" type="mesh" mesh="R_palm_force_sensor"/>
         </body>
         <body name="R_hand_casing" pos="0 0 0.03">
           <inertial pos="-0.01465 0.000057 0.064456" quat="0.999318247 0.012148003 0.034820009 0.001742" mass="0.0216317" diaginertia="0.0000513043 0.0000314256 0.000023379"/>

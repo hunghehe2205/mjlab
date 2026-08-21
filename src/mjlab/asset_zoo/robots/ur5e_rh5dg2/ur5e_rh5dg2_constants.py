@@ -87,6 +87,69 @@ HOME_KEYFRAME = EntityCfg.InitialStateCfg(
 )
 
 ##
+# Joint groups, action scale, pre-grasp pose.
+##
+
+ARM_JOINT_NAMES = (
+  "shoulder_pan_joint",
+  "shoulder_lift_joint",
+  "elbow_joint",
+  "wrist_1_joint",
+  "wrist_2_joint",
+  "wrist_3_joint",
+)
+
+FINGER_JOINT_NAMES = (
+  "R_thumb_yaw_joint",
+  "R_thumb_mcp_joint",
+  "R_thumb_pip_joint",
+  "R_thumb_dip_joint",
+  "R_index_yaw_joint",
+  "R_index_mcp_joint",
+  "R_index_pip_joint",
+  "R_index_dip_joint",
+  "R_middle_yaw_joint",
+  "R_middle_mcp_joint",
+  "R_middle_pip_joint",
+  "R_middle_dip_joint",
+  "R_ring_mcp_joint",
+  "R_ring_pip_joint",
+  "R_ring_dip_joint",
+  "R_pinky_mcp_joint",
+  "R_pinky_pip_joint",
+  "R_pinky_dip_joint",
+)
+
+# Palm-local grasp reference site (hand_center analog).
+GRASP_CENTER_SITE = "grasp_center"
+
+# Per-step delta-action scale (RobustDexGrasp: arm 0.005, finger 0.015 rad).
+ACTION_SCALE_ARM = 0.005
+ACTION_SCALE_FINGER = 0.015
+
+# Pre-grasp finger pose (cupped, thumb opposed); first estimate, refine in viewer.
+INIT_FINGER_POSE = {
+  "R_thumb_yaw_joint": 1.2,
+  "R_thumb_mcp_joint": 0.3,
+  "R_thumb_pip_joint": 0.3,
+  "R_thumb_dip_joint": 0.2,
+  "R_index_yaw_joint": 0.0,
+  "R_index_mcp_joint": 0.3,
+  "R_index_pip_joint": 0.3,
+  "R_index_dip_joint": 0.3,
+  "R_middle_yaw_joint": 0.0,
+  "R_middle_mcp_joint": 0.3,
+  "R_middle_pip_joint": 0.3,
+  "R_middle_dip_joint": 0.3,
+  "R_ring_mcp_joint": 0.3,
+  "R_ring_pip_joint": 0.3,
+  "R_ring_dip_joint": 0.3,
+  "R_pinky_mcp_joint": 0.3,
+  "R_pinky_pip_joint": 0.3,
+  "R_pinky_dip_joint": 0.3,
+}
+
+##
 # Final config.
 ##
 
