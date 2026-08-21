@@ -1,0 +1,231 @@
+<?xml version="1.0"?>
+<mujoco model="rh5dg2_hand">
+  <compiler angle="radian" meshdir="meshes/"/>
+
+  <default>
+    <default class="rh5dg2_hand_visual">
+      <geom contype="0" conaffinity="0" group="2" density="0"/>
+    </default>
+    <default class="rh5dg2_hand_collision">
+      <geom group="3" rgba="0.9 0.9 0 1"/>
+    </default>
+  </default>
+
+  <asset>
+    <mesh name="right_hand_base" content_type="model/stl" file="right_hand_base.stl"/>
+    <mesh name="R_hand_palm" content_type="model/stl" file="right_hand_palm.stl"/>
+    <mesh name="R_thumb_yaw" content_type="model/stl" file="right_thumb_yaw.stl"/>
+    <mesh name="R_thumb_mcp" content_type="model/stl" file="right_thumb_mcp.stl"/>
+    <mesh name="R_thumb_pip" content_type="model/stl" file="right_thumb_pip.stl"/>
+    <mesh name="R_thumb_dip" content_type="model/stl" file="right_thumb_dip.stl"/>
+    <mesh name="R_thumb_force_sensor" content_type="model/stl" file="right_thumb_force_sensor.stl"/>
+    <mesh name="R_index_yaw" content_type="model/stl" file="right_index_yaw.stl"/>
+    <mesh name="R_index_mcp" content_type="model/stl" file="right_index_mcp.stl"/>
+    <mesh name="R_index_pip" content_type="model/stl" file="right_index_pip.stl"/>
+    <mesh name="R_index_dip" content_type="model/stl" file="right_index_dip.stl"/>
+    <mesh name="R_index_force_sensor" content_type="model/stl" file="right_index_force_sensor.stl"/>
+    <mesh name="R_middle_yaw" content_type="model/stl" file="right_middle_yaw.stl"/>
+    <mesh name="R_middle_mcp" content_type="model/stl" file="right_middle_mcp.stl"/>
+    <mesh name="R_middle_pip" content_type="model/stl" file="right_middle_pip.stl"/>
+    <mesh name="R_middle_dip" content_type="model/stl" file="right_middle_dip.stl"/>
+    <mesh name="R_middle_force_sensor" content_type="model/stl" file="right_middle_force_sensor.stl"/>
+    <mesh name="R_ring_mcp" content_type="model/stl" file="right_ring_mcp.stl"/>
+    <mesh name="R_ring_pip" content_type="model/stl" file="right_ring_pip.stl"/>
+    <mesh name="R_ring_dip" content_type="model/stl" file="right_ring_dip.stl"/>
+    <mesh name="R_ring_force_sensor" content_type="model/stl" file="right_ring_force_sensor.stl"/>
+    <mesh name="R_pinky_mcp" content_type="model/stl" file="right_pinky_mcp.stl"/>
+    <mesh name="R_pinky_pip" content_type="model/stl" file="right_pinky_pip.stl"/>
+    <mesh name="R_pinky_dip" content_type="model/stl" file="right_pinky_dip.stl"/>
+    <mesh name="R_pinky_force_sensor" content_type="model/stl" file="right_pinky_force_sensor.stl"/>
+    <mesh name="R_palm_force_sensor" content_type="model/stl" file="right_palm_force_sensor.stl"/>
+    <mesh name="R_hand_casing" content_type="model/stl" file="right_hand_casing.stl"/>
+  </asset>
+
+  <worldbody>
+    <body name="right_hand">
+      <inertial pos="0.00059 0 0.018658" quat="0.500912935 0.500890935 -0.499107935 0.499084935" mass="0.0816273" diaginertia="0.0000362937 0.0000275104 0.0000264222"/>
+      <geom name="right_hand_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="1 1 1 1" mesh="right_hand_base"/>
+      <geom name="right_hand_collision_1" class="rh5dg2_hand_collision" size="0.025 0.016" pos="0 0 0.016" type="cylinder"/>
+      <body name="R_hand_palm">
+        <inertial pos="0.005071 0.00062 0.095611" quat="0.998231322 -0.004586001 0.053147017 0.026241008" mass="0.26111" diaginertia="0.000303653 0.00023854 0.0000995112"/>
+        <geom name="R_hand_palm_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_hand_palm"/>
+        <geom name="R_hand_palm_collision_1" class="rh5dg2_hand_collision" size="0.011 0.044 0.026" pos="0.0085 0 0.115437" quat="0.999579766 0 -0.028987793 0" type="box"/>
+        <geom name="R_hand_palm_collision_2" class="rh5dg2_hand_collision" size="0.011 0.021 0.013" pos="0.010565 -0.023653 0.076557" quat="0.999579766 0 -0.028987793 0" type="box"/>
+        <geom name="R_hand_palm_collision_3" class="rh5dg2_hand_collision" size="0.002 0.017 0.012" pos="0.020919 -0.023616 0.07875" quat="0.999241844 -0.019004597 -0.023005596 -0.025006096" type="box"/>
+        <geom name="R_hand_palm_collision_4" class="rh5dg2_hand_collision" size="0.002 0.013 0.011" pos="0.019929 -0.021582 0.061993" quat="0.994109354 -0.012001304 0.100011036 -0.040004414" type="box"/>
+        <geom name="R_hand_palm_collision_5" class="rh5dg2_hand_collision" size="0.002 0.005 0.011" pos="0.021296 -0.010894 0.05035" quat="0.985087158 0.089007914 -0.06100541 -0.134012022" type="box"/>
+        <geom name="R_hand_palm_collision_6" class="rh5dg2_hand_collision" size="0.002 0.006 0.005" pos="0.016745 -0.020764 0.0465" quat="0.943983004 0.179997001 0.0599989 -0.269995001" type="box"/>
+        <geom name="R_hand_palm_collision_7" class="rh5dg2_hand_collision" size="0.008 0.002 0.012" pos="0.007 -0.034024 0.053697" quat="0.952991463 0.302997147 0 0" type="box"/>
+        <geom name="R_hand_palm_collision_8" class="rh5dg2_hand_collision" size="0.011 0.041 0.047" pos="-0.005778 0 0.09736" type="box"/>
+        <geom name="R_hand_palm_collision_9" class="rh5dg2_hand_collision" size="0.009 0.041 0.031" pos="-0.014854 0 0.09294" type="box"/>
+        <geom name="R_hand_palm_collision_10" class="rh5dg2_hand_collision" size="0.009 0.029 0.019" pos="-0.015945 0 0.060691" type="box"/>
+        <body name="R_thumb_yaw" pos="0.021 0.021699 0.07225">
+          <inertial pos="0.000852 0.004836 -0.005741" quat="0.701002146 0.706899147 -0.035054007 -0.087526018" mass="0.00481735" diaginertia="0.000000180572 0.00000016585 0.000000093259"/>
+          <joint name="R_thumb_yaw_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.91986" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+          <geom name="R_thumb_yaw_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_thumb_yaw"/>
+          <geom name="R_thumb_yaw_collision_1" class="rh5dg2_hand_collision" size="0.01 0.013" pos="0 0 -0.0055" type="cylinder"/>
+          <body name="R_thumb_mcp" pos="0.008419 0.010193 -0.01022" quat="0.492404861 0.586807834 0.492408861 0.413191883">
+            <inertial pos="0.025195 0.004702 -0.007211" quat="-0.159196045 0.689048194 0.161298045 0.688369194" mass="0.0417561" diaginertia="0.00000865413 0.00000755657 0.00000388409"/>
+            <joint name="R_thumb_mcp_joint" pos="0 0 0" axis="0 0 1" limited="true" range="0 0.610865" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+            <geom name="R_thumb_mcp_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_thumb_mcp"/>
+            <geom name="R_thumb_mcp_collision_1" class="rh5dg2_hand_collision" size="0.015 0.014 0.011" pos="0.029722 0.00637868 -0.00716495" quat="0.141983014 0.00000395 -0.000000422 -0.989869094" type="box"/>
+            <body name="R_thumb_pip" pos="0.043727 0.01749 0.0036">
+              <inertial pos="0.019641 0.002424 -0.010919" quat="-0.166249927 0.688040697 0.166518927 0.686463698" mass="0.041381" diaginertia="0.00000867809 0.00000753304 0.00000429002"/>
+              <joint name="R_thumb_pip_joint" pos="0 0 0" axis="0 0 1" limited="true" range="0 1.04189" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+              <geom name="R_thumb_pip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_thumb_pip"/>
+              <geom name="R_thumb_pip_collision_1" class="rh5dg2_hand_collision" size="0.0145 0.014 0.01" pos="0.0215 0.00316277 -0.0104817" quat="0.183984956 0.004003579 -0.004000229 -0.982912766" type="box"/>
+              <body name="R_thumb_dip" pos="0.036427 0.019902 -0.0028">
+                <inertial pos="0.012922 -0.004489 -0.007998" quat="-0.041863008 0.705900141 0.039408008 0.705974141" mass="0.00737636" diaginertia="0.000000831353 0.000000811951 0.000000474522"/>
+                <joint name="R_thumb_dip_joint" pos="0 0 0" axis="0 0 1" limited="true" range="0 0.942478" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+                <geom name="R_thumb_dip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_thumb_dip"/>
+                <geom name="R_thumb_dip_collision_1" class="rh5dg2_hand_collision" size="0.01 0.008" pos="0.00839997 -0.00619217 -0.00771248" quat="0.000001347 0.00000397 0.000000143 -1" type="cylinder"/>
+                <geom name="R_thumb_dip_collision_2" class="rh5dg2_hand_collision" size="0.008 0.008" pos="0.0151 -0.00239215 -0.00771242" quat="0.000001347 0.00000397 0.000000143 -1" type="cylinder"/>
+                <geom name="R_thumb_dip_collision_3" class="rh5dg2_hand_collision" size="0.005 0.009" pos="0.00769999 -0.0147922 -0.00771249" quat="0.000001347 0.00000397 0.000000143 -1" type="cylinder"/>
+                <geom name="R_thumb_dip_collision_4" class="rh5dg2_hand_collision" size="0.0065 0.007" pos="0.0216 -0.00049213 -0.00771237" quat="0.000001347 0.00000397 0.000000143 -1" type="cylinder"/>
+                <geom name="R_thumb_dip_collision_5" class="rh5dg2_hand_collision" size="0.0035 0.005" pos="0.0286999 0.00150789 -0.00771231" quat="0.000001347 0.00000397 0.000000143 -1" type="cylinder"/>
+                <body name="R_thumb_force_sensor" pos="0.025343 0.007282 -0.008" quat="0.454598066 -0.541730079 -0.454403066 -0.541652079">
+                  <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431614026 0.560279033 -0.560265033 0.431161026" mass="0.000821544" diaginertia="0.000000051789 0.000000039058 0.000000015269"/>
+                  <geom name="R_thumb_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_thumb_force_sensor"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="R_index_yaw" pos="0.0111 0.033249 0.15225" quat="0.496636772 0.503338769 0.503340769 0.496638772">
+          <inertial pos="0 0 0" quat="0.004729 0.707090968 0.004729 0.707090968" mass="0.00153498" diaginertia="0.000000047955 0.00000004611 0.000000004001"/>
+          <joint name="R_index_yaw_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-0.26118 0.26118" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+          <geom name="R_index_yaw_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_index_yaw"/>
+          <body name="R_index_mcp" pos="0.0114 0 0" quat="0.707090921 -0.004735999 -0.707090921 0.004735999">
+            <inertial pos="-0.001112 0.023747 0.011574" quat="0.585457141 0.477550115 -0.513584124 0.406715098" mass="0.0128248" diaginertia="0.00000187869 0.00000148968 0.000000693641"/>
+            <joint name="R_index_mcp_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.309" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+            <geom name="R_index_mcp_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_index_mcp"/>
+            <geom name="R_index_mcp_collision_1" class="rh5dg2_hand_collision" size="0.00083 0.011 0.008" pos="0.0117199 0.0231001 0.01134" quat="0.001999359 -0.995579633 0.091958866 -0.018993793" type="box"/>
+            <geom name="R_index_mcp_collision_2" class="rh5dg2_hand_collision" size="0.013 0.015 0.009" pos="-0.00192705 0.0225 0.01134" quat="0.000000191 -0.994041536 0.109001949 -0.000001869" type="box"/>
+            <geom name="R_index_mcp_collision_3" class="rh5dg2_hand_collision" size="0.006 0.009" pos="0.00000006 -0.00199998 0.01134" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+            <body name="R_index_pip" pos="0.011359 0.042391 0.00295">
+              <inertial pos="-0.001243 0.011059 0.008644" quat="0.681164849 0.674550851 0.193701957 0.208506954" mass="0.00574475" diaginertia="0.00000057412 0.000000521871 0.00000040073"/>
+              <joint name="R_index_pip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.48353" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+              <geom name="R_index_pip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_index_pip"/>
+              <geom name="R_index_pip_collision_1" class="rh5dg2_hand_collision" size="0.003 0.005 0.008" pos="0.00512283 0.00650009 0.00860004" quat="0.00000019 -0.994149369 0.10801404 -0.000001869" type="box"/>
+              <geom name="R_index_pip_collision_2" class="rh5dg2_hand_collision" size="0.008 0.011 0.009" pos="-0.00292219 0.0110611 0.00860001" quat="0.000000304 -0.985627355 0.168934061 -0.000001854" type="box"/>
+              <body name="R_index_dip" pos="0 0.018776 0.00035">
+                <inertial pos="0.002376 0.015248 0.008101" quat="0.699694841 0.699704841 -0.102202977 -0.101954977" mass="0.00664977" diaginertia="0.000000609607 0.000000521593 0.000000177392"/>
+                <joint name="R_index_dip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.568" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+                <geom name="R_index_dip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_index_dip"/>
+                <geom name="R_index_dip_collision_1" class="rh5dg2_hand_collision" size="0.0055 0.007" pos="0.00299971 0.0128701 0.00800003" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_index_dip_collision_2" class="rh5dg2_hand_collision" size="0.0065 0.006" pos="0.00549968 0.0195001 0.00780004" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_index_dip_collision_3" class="rh5dg2_hand_collision" size="0.006 0.006" pos="0.00799966 0.0250001 0.00780005" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_index_dip_collision_4" class="rh5dg2_hand_collision" size="0.005 0.006" pos="0.00835964 0.0290001 0.00780005" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_index_dip_collision_5" class="rh5dg2_hand_collision" size="0.0035 0.0045" pos="0.00919962 0.0323001 0.00780006" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <body name="R_index_force_sensor" pos="0.014134 0.029094 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
+                  <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821523" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
+                  <geom name="R_index_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_index_force_sensor"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="R_middle_yaw" pos="0.0155 0.007509 0.14468" quat="0.496636772 0.503338769 0.503340769 0.496638772">
+          <inertial pos="-0.00001 0.007514 -0.0045" quat="0.004729 0.707090968 0.004729 0.707090968" mass="0.00153498" diaginertia="0.000000047955 0.00000004611 0.000000004001"/>
+          <joint name="R_middle_yaw_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-0.26118 0.26118" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+          <geom name="R_middle_yaw_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_middle_yaw"/>
+          <body name="R_middle_mcp" pos="0.01139 0.007514 -0.0045" quat="0.707090921 -0.004735999 -0.707090921 0.004735999">
+            <inertial pos="-0.001112 0.023747 0.011574" quat="0.585457141 0.477550115 -0.513584124 0.406715098" mass="0.0128248" diaginertia="0.00000187869 0.00000148968 0.000000693641"/>
+            <joint name="R_middle_mcp_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.309" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+            <geom name="R_middle_mcp_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_middle_mcp"/>
+            <geom name="R_middle_mcp_collision_1" class="rh5dg2_hand_collision" size="0.00083 0.011 0.008" pos="0.0117188 0.0230964 0.01134" quat="0.001999359 -0.995579633 0.091958866 -0.018993793" type="box"/>
+            <geom name="R_middle_mcp_collision_2" class="rh5dg2_hand_collision" size="0.013 0.015 0.009" pos="-0.00192817 0.0224964 0.01134" quat="0.000000191 -0.994041536 0.109001949 -0.000001869" type="box"/>
+            <geom name="R_middle_mcp_collision_3" class="rh5dg2_hand_collision" size="0.006 0.009" pos="-0.00000106 -0.00200362 0.01134" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+            <body name="R_middle_pip" pos="0.011359 0.042391 0.00295">
+              <inertial pos="-0.001243 0.011059 0.008644" quat="0.681164849 0.674550851 0.193701957 0.208506954" mass="0.00574475" diaginertia="0.00000057412 0.000000521871 0.00000040073"/>
+              <joint name="R_middle_pip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.48353" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+              <geom name="R_middle_pip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_middle_pip"/>
+              <geom name="R_middle_pip_collision_1" class="rh5dg2_hand_collision" size="0.003 0.005 0.008" pos="0.00512171 0.00649645 0.00860002" quat="0.00000019 -0.994149369 0.10801404 -0.000001869" type="box"/>
+              <geom name="R_middle_pip_collision_2" class="rh5dg2_hand_collision" size="0.008 0.011 0.009" pos="-0.00292331 0.0110574 0.00859999" quat="0.000000304 -0.985627355 0.168934061 -0.000001854" type="box"/>
+              <body name="R_middle_dip" pos="0 0.018776 0.00035">
+                <inertial pos="0.002457 0.015945 0.008101" quat="0.703921206 0.703868206 -0.06767002 -0.06697202" mass="0.00790903" diaginertia="0.000000991859 0.000000919077 0.000000248615"/>
+                <joint name="R_middle_dip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.568" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+                <geom name="R_middle_dip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_middle_dip"/>
+                <geom name="R_middle_dip_collision_1" class="rh5dg2_hand_collision" size="0.0055 0.007" pos="0.00299859 0.0128664 0.00800002" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_middle_dip_collision_2" class="rh5dg2_hand_collision" size="0.0065 0.006" pos="0.00549856 0.0194965 0.00780003" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_middle_dip_collision_3" class="rh5dg2_hand_collision" size="0.006 0.006" pos="0.00799854 0.0249965 0.00780003" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_middle_dip_collision_4" class="rh5dg2_hand_collision" size="0.005 0.006" pos="0.00835852 0.0289965 0.00780004" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <geom name="R_middle_dip_collision_5" class="rh5dg2_hand_collision" size="0.004 0.005" pos="0.0096985 0.0334965 0.00780004" quat="0.000000013 1 0.00000208 0.00000208" type="cylinder"/>
+                <body name="R_middle_force_sensor" pos="0.014553 0.03105 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
+                  <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821524" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
+                  <geom name="R_middle_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_middle_force_sensor"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="R_ring_mcp" pos="0.0111 -0.005651 0.15225" quat="0.707105281 0.707108281 0 0">
+          <inertial pos="-0.001132 0.02387 0.009526" quat="0.587046898 0.472398918 -0.51732191 0.405700929" mass="0.0126841" diaginertia="0.00000183436 0.00000144521 0.000000684801"/>
+          <joint name="R_ring_mcp_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.309" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+          <geom name="R_ring_mcp_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_ring_mcp"/>
+          <geom name="R_ring_mcp_collision_1" class="rh5dg2_hand_collision" size="0.013 0.015 0.009" pos="-0.00179 0.0225001 0.00955981" quat="0.000004217 0.994041199 -0.109005022 0.000000462" type="box"/>
+          <geom name="R_ring_mcp_collision_2" class="rh5dg2_hand_collision" size="0.00083 0.011 0.008" pos="0.01186 0.0231321 0.0095598" quat="0.000004225 0.995761048 -0.091977904 0.00000039" type="box"/>
+          <geom name="R_ring_mcp_collision_3" class="rh5dg2_hand_collision" size="0.006 0.009" pos="0 -0.00199992 0.00956001" quat="0.000004243 1 0 0" type="cylinder"/>
+          <body name="R_ring_pip" pos="0.011359 0.042391 0.0009" quat="-0.000004 0 0 1">
+            <inertial pos="0.001243 -0.011059 0.008644" quat="0.674550851 0.681164849 0.208506954 0.193701957" mass="0.00574475" diaginertia="0.00000057412 0.000000521871 0.00000040073"/>
+            <joint name="R_ring_pip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.48353" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+            <geom name="R_ring_pip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_ring_pip"/>
+            <geom name="R_ring_pip_collision_1" class="rh5dg2_hand_collision" size="0.003 0.005 0.008" pos="-0.00512305 -0.00650004 0.00859958" quat="0.000000458 -0.10801997 -0.994148724 -0.000004218" type="box"/>
+            <geom name="R_ring_pip_collision_2" class="rh5dg2_hand_collision" size="0.008 0.011 0.009" pos="0.00292191 -0.0110611 0.00859954" quat="0.000000717 -0.168940056 -0.985626327 -0.000004182" type="box"/>
+            <body name="R_ring_dip" pos="0 -0.018776 0.00035" quat="-0.000004 0 0 1">
+              <inertial pos="0.001993 0.015062 0.008102" quat="0.702048049 0.701869049 -0.085124006 -0.085219006" mass="0.00751895" diaginertia="0.000000709281 0.000000638484 0.000000214392"/>
+              <joint name="R_ring_dip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.568" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+              <geom name="R_ring_dip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_ring_dip"/>
+              <geom name="R_ring_dip_collision_1" class="rh5dg2_hand_collision" size="0.0055 0.007" pos="0.00300036 0.01287 0.00799937" quat="0.000004243 1 -0.000008 0" type="cylinder"/>
+              <geom name="R_ring_dip_collision_2" class="rh5dg2_hand_collision" size="0.0065 0.006" pos="0.00550046 0.0195 0.00779931" quat="0.000004243 1 -0.000008 0" type="cylinder"/>
+              <geom name="R_ring_dip_collision_3" class="rh5dg2_hand_collision" size="0.006 0.006" pos="0.00800055 0.025 0.00779927" quat="0.000004243 1 -0.000008 0" type="cylinder"/>
+              <geom name="R_ring_dip_collision_4" class="rh5dg2_hand_collision" size="0.005 0.006" pos="0.00836061 0.0289999 0.00779923" quat="0.000004243 1 -0.000008 0" type="cylinder"/>
+              <geom name="R_ring_dip_collision_5" class="rh5dg2_hand_collision" size="0.0035 0.0045" pos="0.00920067 0.0322999 0.0077992" quat="0.000004243 1 -0.000008 0" type="cylinder"/>
+              <body name="R_ring_force_sensor" pos="0.014134 0.029094 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
+                <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821524" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
+                <geom name="R_ring_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_ring_force_sensor"/>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="R_pinky_mcp" pos="0.0111 -0.027151 0.15225" quat="0.707105281 0.707108281 0 0">
+          <inertial pos="-0.001132 0.02387 0.009526" quat="0.587046898 0.472398918 -0.51732191 0.405700929" mass="0.0126841" diaginertia="0.00000183436 0.00000144521 0.000000684801"/>
+          <joint name="R_pinky_mcp_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.309" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+          <geom name="R_pinky_mcp_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_pinky_mcp"/>
+          <geom name="R_pinky_mcp_collision_1" class="rh5dg2_hand_collision" size="0.013 0.015 0.009" pos="-0.00179 0.0225001 0.00955981" quat="0.000004217 0.994041199 -0.109005022 0.000000462" type="box"/>
+          <geom name="R_pinky_mcp_collision_2" class="rh5dg2_hand_collision" size="0.00083 0.011 0.008" pos="0.01186 0.0231321 0.0095598" quat="0.000004225 0.995761048 -0.091977904 0.00000039" type="box"/>
+          <geom name="R_pinky_mcp_collision_3" class="rh5dg2_hand_collision" size="0.006 0.009" pos="0 -0.00199992 0.00956001" quat="0.000004243 1 0 0" type="cylinder"/>
+          <body name="R_pinky_pip" pos="0.011359 0.042391 0.0009">
+            <inertial pos="-0.001243 0.011059 0.008644" quat="0.681164849 0.674550851 0.193701957 0.208506954" mass="0.00574475" diaginertia="0.00000057412 0.000000521871 0.00000040073"/>
+            <joint name="R_pinky_pip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.48353" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+            <geom name="R_pinky_pip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_pinky_pip"/>
+            <geom name="R_pinky_pip_collision_1" class="rh5dg2_hand_collision" size="0.003 0.005 0.008" pos="0.005123 0.00650008 0.00859958" quat="0.000004218 0.994149154 -0.108016017 0.000000458" type="box"/>
+            <geom name="R_pinky_pip_collision_2" class="rh5dg2_hand_collision" size="0.008 0.011 0.009" pos="-0.002922 0.0110611 0.00859954" quat="0.000004182 0.985627022 -0.168936004 0.000000717" type="box"/>
+            <body name="R_pinky_dip" pos="0 0.018776 0.00035">
+              <inertial pos="0.002226 0.014929 0.008099" quat="0.704029893 0.704062893 -0.06585299 -0.06557999" mass="0.00639879" diaginertia="0.000000766065 0.000000703065 0.000000191292"/>
+              <joint name="R_pinky_dip_joint" pos="0 0 0" axis="0 0 -1" limited="true" range="0 1.568" actuatorfrclimited="true" actuatorfrcrange="-1 1"/>
+              <geom name="R_pinky_dip_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_pinky_dip"/>
+              <geom name="R_pinky_dip_collision_1" class="rh5dg2_hand_collision" size="0.0055 0.007" pos="0.003 0.0128701 0.00799937" quat="0.000004243 1 0 0" type="cylinder"/>
+              <geom name="R_pinky_dip_collision_2" class="rh5dg2_hand_collision" size="0.0065 0.006" pos="0.0055 0.0195001 0.00779931" quat="0.000004243 1 0 0" type="cylinder"/>
+              <geom name="R_pinky_dip_collision_3" class="rh5dg2_hand_collision" size="0.0055 0.006" pos="0.008 0.0250001 0.00779927" quat="0.000004243 1 0 0" type="cylinder"/>
+              <geom name="R_pinky_dip_collision_4" class="rh5dg2_hand_collision" size="0.0045 0.0055" pos="0.00836 0.0290001 0.00779923" quat="0.000004243 1 0 0" type="cylinder"/>
+              <geom name="R_pinky_dip_collision_5" class="rh5dg2_hand_collision" size="0.003 0.004" pos="0.0092 0.0323001 0.0077992" quat="0.000004243 1 0 0" type="cylinder"/>
+              <body name="R_pinky_force_sensor" pos="0.013925 0.028117 0.0081" quat="0.706355528 -0.031675979 0.706429528 0.031871979">
+                <inertial pos="0.000015 -0.005633 -0.005599" quat="0.431619025 0.560275032 -0.560269032 0.431156025" mass="0.000821523" diaginertia="0.000000051788 0.000000039058 0.000000015268"/>
+                <geom name="R_pinky_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_pinky_force_sensor"/>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="R_palm_force_sensor" pos="0.021234 0.000148 0.1121" quat="0.508715773 0.491076781 0.489132782 0.510686772">
+          <inertial pos="0.00038 0.001479 -0.003456" quat="0.002268999 0.709136712 0.015691994 0.704892713" mass="0.00510274" diaginertia="0.00000192364 0.0000015414 0.000000417373"/>
+          <geom name="R_palm_force_sensor_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.25 0.25 0.25 1" mesh="R_palm_force_sensor"/>
+        </body>
+        <body name="R_hand_casing" pos="0 0 0.03">
+          <inertial pos="-0.01465 0.000057 0.064456" quat="0.999318247 0.012148003 0.034820009 0.001742" mass="0.0216317" diaginertia="0.0000513043 0.0000314256 0.000023379"/>
+          <geom name="R_hand_casing_visual_0" class="rh5dg2_hand_visual" type="mesh" density="1000" rgba="0.866667 0.866667 0.890196 1" mesh="R_hand_casing"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
