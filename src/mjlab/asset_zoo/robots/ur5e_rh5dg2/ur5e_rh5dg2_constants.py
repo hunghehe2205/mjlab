@@ -104,13 +104,57 @@ def get_ur5e_rh5dg2_robot_cfg() -> EntityCfg:
   )
 
 
+##
+# Standalone viewing.
+##
+
+
+def add_scene(spec: mujoco.MjSpec) -> mujoco.MjSpec:
+  """Add a skybox, checker ground plane, and directional light in place."""
+  spec.add_texture(
+    name="skybox",
+    type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
+    builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
+    rgb1=(0.3, 0.5, 0.7),
+    rgb2=(0.0, 0.0, 0.0),
+    width=512,
+    height=3072,
+  )
+  spec.add_texture(
+    name="groundplane",
+    type=mujoco.mjtTexture.mjTEXTURE_2D,
+    builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
+    rgb1=(0.2, 0.3, 0.4),
+    rgb2=(0.1, 0.15, 0.2),
+    mark=mujoco.mjtMark.mjMARK_EDGE,
+    markrgb=(0.8, 0.8, 0.8),
+    width=300,
+    height=300,
+  )
+  mat = spec.add_material(
+    name="groundplane", texrepeat=(5, 5), texuniform=True, reflectance=0.2
+  )
+  mat.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = "groundplane"
+  spec.worldbody.add_light(
+    pos=(0, 0, 3.0), dir=(0, 0, -1), type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
+  )
+  spec.worldbody.add_geom(
+    name="floor",
+    type=mujoco.mjtGeom.mjGEOM_PLANE,
+    size=(0, 0, 0.05),
+    material="groundplane",
+  )
+  return spec
+
+
 if __name__ == "__main__":
   import mujoco.viewer as viewer
 
   from mjlab.entity.entity import Entity
 
   robot = Entity(get_ur5e_rh5dg2_robot_cfg())
-  model = robot.spec.compile()
+  spec = add_scene(robot.spec)
+  model = spec.compile()
   # Match the integrator mjlab sims use; the compiled default is Euler.
   model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
   viewer.launch(model)
