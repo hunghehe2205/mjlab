@@ -52,22 +52,31 @@ assets: src/mjlab/asset_zoo/objects/dexgrasp/...
 
 ## C. Reset & pre-grasp (event terms, CPU per-reset như bản gốc)
 
-- [ ] Event sample pose object: phân cực r ∈ [0.45, 0.75], góc ∈ [−0.7π,
-  −0.3π], |x| < 0.25, xoay z ngẫu nhiên, z = mặt bàn − lowest_point.
-  (Phase 1 dùng uniform; edge-biased Beta để Phase 2.)
-- [ ] Visible points: raycast trimesh từ camera cố định (dùng lại vị trí camera
-  gốc, quy đổi hệ tọa độ scene mình) → tâm vùng nhìn thấy + hướng tiếp cận.
-- [ ] Port `sample_rot_mats` (sample N hướng quanh trục tiếp cận + projection
-  width) — giữ nguyên logic, chạy batch numpy.
-- [ ] **IK giải tích UR5e**: port `inverseKinematicsUR5.py`, thay DH parameters
-  UR5 → UR5e; unit test forward-check (FK(IK(pose)) ≈ pose) trên lưới pose
-  quanh workspace.
-- [ ] Scoring nghiệm IK: projection width < 0.18 (coeff 5) + wrist angle
-  (coeff 1) → chọn best; set qpos arm + `INIT_FINGER_POSE`.
-- [ ] Check collision sau reset (contact sensor arm), fallback: copy pose env
-  khác cùng object hoặc pose cứng.
-- [ ] Gọi `sim.forward()` sau khi ghi pose (idiom `_pending_forward` của
-  lift-cube).
+- [x] Event sample pose object (`pregrasp/pose_sampler.py::sample_object_pose`):
+  phân cực r ∈ [0.45, 0.75], góc ∈ [−0.7π, −0.3π], |x| < 0.25, xoay z, z = mặt
+  bàn − lowest_point. Phase 1 uniform; nhánh Beta wired (`non_uniform`) cho Phase 2.
+- [x] Visible points (`pregrasp/visibility.py`): raycast trimesh từ camera cố
+  định (env frame, `CAMERA_POSITION` port từ gốc — verify viewer, xem problems/
+  pregrasp-ur5e-tuning) → visible surface + tâm. Fallback ray-miss = điểm pcd.
+- [x] `sample_rot_mats` (`pregrasp/pose_sampler.py`): N palm-roll quanh trục tiếp
+  cận + projection width; test rot-mat orthonormal, det=+1.
+- [x] **IK giải tích UR5e** (`pregrasp/ik_ur5e.py`): analytic 8-nghiệm UR, DH
+  fit theo MJCF UR5e (không phải textbook) + offset base/flange đo từ MuJoCo FK
+  (`_B=Rz(π)`, `_E≈I`); `solve_arm_qpos(T_base_flange, seed)`. Test round-trip
+  FK(IK)≈pose vs MuJoCo: **≤0.5mm** trên 500 pose, 0 miss. `_ARG_TOL=1e-2` để
+  không loại nhầm pose reachable do residual DH.
+- [x] Scoring + composition (`pregrasp/generator.py::generate_pregrasp`):
+  visible → approach → grasp-center target (0.25m) → sample_rot_mats → IK mỗi
+  candidate qua `ArmKinematics` (`pregrasp/kinematics.py`, đo frame flange↔gc từ
+  model) → chọn best theo projection width < 0.18 (coeff 5) + wrist angle. Test
+  integration trên object thật + grasp-center round-trip sub-mm.
+- [x] Reset event (`mdp/events.py::ResetGraspPose`) + wire vào robot cfg: ghi
+  object root (sampled pose + env_origin) + arm qpos, fingers giữ default
+  (`INIT_FINGER_POSE`). Test: grasp-center in-sim khớp IK prediction, object trên
+  bàn, no NaN. **Chưa:** self-collision probe resample (hoãn — problems/
+  pregrasp-ur5e-tuning); IK-fail đã có `fallback_arm_qpos`.
+- [x] `sim.forward()` sau ghi pose: env tự forward sau reset events (`_reset_idx`
+  → `write_data_to_sim` → `sim.forward()`), reset event không cần tự gọi.
 
 ## D. Actions
 

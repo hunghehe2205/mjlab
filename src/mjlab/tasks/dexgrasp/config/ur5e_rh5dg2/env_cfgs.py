@@ -9,6 +9,8 @@ from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
 from mjlab.entity import EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp.actions import RelativeJointPositionActionCfg
+from mjlab.managers.event_manager import EventTermCfg
+from mjlab.tasks.dexgrasp import mdp
 from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import (
   ARM_MOUNT_Z,
   TABLE_TOP_Z,
@@ -64,6 +66,20 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   action = cfg.actions["joint_pos"]
   assert isinstance(action, RelativeJointPositionActionCfg)
   action.scale = ACTION_SCALE
+
+  # Replace the skeleton's default-pose resets with the sampled object pose +
+  # analytic-IK pre-grasp (§C). Arena/base placement stays as is.
+  del cfg.events["reset_robot_joints"]
+  del cfg.events["reset_object"]
+  cfg.events["reset_grasp_pose"] = EventTermCfg(
+    func=mdp.ResetGraspPose,
+    mode="reset",
+    params={
+      "object_name": SKELETON_OBJECT,
+      "table_top_z": TABLE_TOP_Z,
+      "mount_z": ARM_MOUNT_Z,
+    },
+  )
 
   cfg.viewer.body_name = "base"
 

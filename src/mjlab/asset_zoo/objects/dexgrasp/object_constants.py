@@ -20,6 +20,7 @@ from typing import Callable
 
 import mujoco
 import numpy as np
+import trimesh
 
 from mjlab.entity import EntityCfg
 from mjlab.entity.variants import VariantEntityCfg
@@ -97,6 +98,14 @@ class DexGraspObject:
   def load_surface_points(self) -> np.ndarray:
     """(200, 3) affordance cloud in object frame."""
     return np.load(self.npz_path)["points"]
+
+  def load_affordance_mesh(self) -> trimesh.Trimesh:
+    """Collision-hull mesh (object frame) for the pre-grasp visibility raycast."""
+    mesh = trimesh.load_mesh(str(ASSETS_DIR / self.name / "collision.obj"))
+    if isinstance(mesh, trimesh.Scene):
+      mesh = mesh.dump(concatenate=True)
+    assert isinstance(mesh, trimesh.Trimesh)
+    return mesh
 
   def get_entity_cfg(self) -> EntityCfg:
     return EntityCfg(spec_fn=self.spec_fn)
