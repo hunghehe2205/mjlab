@@ -249,12 +249,24 @@ class RelativeJointPositionActionCfg(BaseActionCfg):
 
 
 class RelativeJointPositionAction(BaseAction):
-  """Control joints via position targets relative to current positions."""
+  """Control joints via position targets relative to current positions.
+
+  The target is anchored once per control step in ``process_actions`` and held
+  fixed across the decimation substeps. Re-anchoring on the current position each
+  substep would scale the effective delta by the decimation factor.
+  """
+
+  def __init__(self, cfg: RelativeJointPositionActionCfg, env: ManagerBasedRlEnv):
+    super().__init__(cfg=cfg, env=env)
+    self._target = torch.zeros(self.num_envs, self.action_dim, device=self.device)
+
+  def process_actions(self, actions: torch.Tensor) -> None:
+    super().process_actions(actions)
+    current_pos = self._entity.data.joint_pos[:, self._target_ids]
+    self._target = current_pos + self._processed_actions
 
   def apply_actions(self) -> None:
-    current_pos = self._entity.data.joint_pos[:, self._target_ids]
-    target = current_pos + self._processed_actions
-    self._entity.set_joint_position_target(target, joint_ids=self._target_ids)
+    self._entity.set_joint_position_target(self._target, joint_ids=self._target_ids)
 
 
 class JointVelocityAction(BaseAction):

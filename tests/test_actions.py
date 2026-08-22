@@ -310,6 +310,34 @@ def test_relative_joint_position_ignores_encoder_bias(floating_base_entity, devi
   entity.data.encoder_bias[:, action.target_ids] = 0.0
 
 
+def test_relative_joint_position_holds_target_across_substeps(
+  floating_base_entity, device
+):
+  """The target anchors once per process_actions; re-applying after the joints
+  move (decimation substeps) must not re-anchor it."""
+  entity = floating_base_entity
+  env = make_env(entity, "robot", device)
+
+  cfg = RelativeJointPositionActionCfg(
+    entity_name="robot", actuator_names=("joint.*",), scale=0.1
+  )
+  action = cfg.build(env)
+
+  anchor = entity.data.joint_pos[:, action.target_ids].clone()
+  action.process_actions(torch.ones(4, action.action_dim, device=device))
+  action.apply_actions()
+
+  # Simulate substep drift, then re-apply: target must stay at anchor + delta.
+  entity.data.write_joint_position(anchor + 0.05, joint_ids=action.target_ids)
+  action.apply_actions()
+
+  expected = anchor + 0.1
+  assert torch.allclose(entity.data.joint_pos_target[:, action.target_ids], expected)
+
+  # Restore the shared fixture.
+  entity.data.write_joint_position(anchor, joint_ids=action.target_ids)
+
+
 def test_relative_joint_position_offset_raises(floating_base_entity, device):
   """Setting offset on RelativeJointPositionActionCfg raises ValueError."""
   with pytest.raises(ValueError, match="offset"):
