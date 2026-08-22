@@ -121,12 +121,15 @@ def test_fingertip_pads_have_collision(model: mujoco.MjModel) -> None:
 
 
 def test_init_finger_pose_valid(model: mujoco.MjModel) -> None:
-  # Covers all 18 finger joints and stays within each joint range.
+  # Covers all 18 joints and stays within the soft limits reset clamps to;
+  # otherwise the pose is silently altered on every reset.
   assert set(c.INIT_FINGER_POSE) == set(c.FINGER_JOINT_NAMES)
+  factor = c.ARTICULATION.soft_joint_pos_limit_factor
   for name, val in c.INIT_FINGER_POSE.items():
     jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{c.HAND_PREFIX}{name}")
     lo, hi = model.jnt_range[jid]
-    assert lo <= val <= hi, f"{name}={val} outside [{lo}, {hi}]"
+    mid, half = 0.5 * (lo + hi), 0.5 * (hi - lo) * factor
+    assert mid - half <= val <= mid + half, f"{name}={val} outside soft limits"
 
 
 def test_init_finger_pose_is_self_collision_free(model: mujoco.MjModel) -> None:

@@ -15,7 +15,7 @@ from pathlib import Path
 import mujoco
 
 from mjlab import MJLAB_SRC_PATH
-from mjlab.actuator import BuiltinPositionActuatorCfg
+from mjlab.actuator import BuiltinPositionActuatorCfg, XmlActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
 ##
@@ -42,7 +42,7 @@ def get_spec() -> mujoco.MjSpec:
   frame = arm.body("wrist_3_link").add_frame(pos=list(site.pos), quat=list(site.quat))
   arm.attach(child=hand, prefix=HAND_PREFIX, frame=frame)
 
-  # Drop the arm-only keyframe; the init state is set by InitialStateCfg.
+  # Drop all keyframes; the init state is set by InitialStateCfg.
   for key in list(arm.keys):
     arm.delete(key)
   return arm
@@ -68,6 +68,10 @@ HAND_ACTUATORS = (
     armature=FINGER_ARMATURE,
   ),
 )
+
+# Adopt the menagerie arm <position> actuators so mjlab actions can target the
+# arm joints (keeps their tuned gains).
+ARM_ACTUATORS = (XmlActuatorCfg(target_names_expr=(r"(shoulder|elbow|wrist).*",)),)
 
 ##
 # Keyframe config.
@@ -154,7 +158,7 @@ INIT_FINGER_POSE = {
 ##
 
 ARTICULATION = EntityArticulationInfoCfg(
-  actuators=HAND_ACTUATORS,
+  actuators=ARM_ACTUATORS + HAND_ACTUATORS,
   soft_joint_pos_limit_factor=0.9,
 )
 

@@ -18,33 +18,37 @@ assets: src/mjlab/asset_zoo/objects/dexgrasp/...
 
 ## A. Assets
 
-- [ ] Thêm site `grasp_center` vào lòng bàn tay `right_hand.xml` (tương đương
-  `hand_center` gốc `[-0.0091, 0, -0.095]` của Allegro — đo lại offset từ mesh
-  RH5-DG2, trục x hướng ra khỏi lòng bàn tay theo convention pre-grasp).
-- [ ] Thêm collision geom (class `rh5dg2_hand_collision`) cho 6 body
-  `R_*_force_sensor` — pad tiếp xúc hiện chỉ có visual mesh.
-- [ ] Định nghĩa `INIT_FINGER_POSE` cho 18 khớp (ngón hé mở, thumb đối diện —
-  vai trò như `init_finger_pose` 16 dim của Allegro); thêm vào keyframe/InitialStateCfg.
-- [ ] Thêm `ACTION_SCALE` cho robot (arm 0.005, finger 0.015 rad).
-- [ ] Chọn 3–5 object phase 1: box + cylinder (procedural spec_fn) + 2–3 mesh
-  YCB lấy từ `rsc/new_training_set` repo gốc (vd banana, potted_meat_can).
-- [ ] Script precompute per-object: 200 surface-sample points (trimesh) +
-  lowest point + centroid → lưu `.npz` cạnh MJCF.
-- [ ] Mesh → MJCF: convex decomposition (coacd) cho collision, freejoint,
-  material `object`; wrap thành `EntityCfg`/`VariantEntityCfg`.
-- [ ] Mở rộng `tests/test_ur5e_rh5dg2_constants.py`: site mới, collision pads.
+- [x] Thêm site `grasp_center` vào lòng bàn tay `right_hand.xml` — palm-local
+  `[0.05, 0, 0.11]`, x hướng ra lòng bàn tay. Ước lượng đầu, refine ở §C viewer.
+- [x] Thêm collision geom (class `rh5dg2_hand_collision`) cho 6 body
+  `R_*_force_sensor` — dùng chính mesh pad (convex hull).
+- [x] Định nghĩa `INIT_FINGER_POSE` cho 18 khớp (cupped, thumb đối diện) — hằng
+  số trong constants, verify self-collision-free. (Chưa nhét vào keyframe: reset
+  event ở §C sẽ set; home keyframe giữ ngón mở = 0.)
+- [x] Thêm `ACTION_SCALE_ARM=0.005`, `ACTION_SCALE_FINGER=0.015` + nhóm tên khớp.
+- [x] Chọn 5 object gần-lồi: box + cylinder (procedural) + potted_meat_can,
+  tomato_soup_can, sugar_box (mesh YCB). Banana bỏ (lõm nhẹ → hull sai).
+- [x] Script `precompute.py`: 200 surface points + normals + centroid + lowest
+  → `.npz` cạnh mesh.
+- [x] Mesh → MJCF `spec_fn`: collision = **convex hull** (không coacd, xem
+  problems/coacd), freejoint, material `object`; wrap `EntityCfg` + registry
+  `PHASE1_OBJECTS`. (`VariantEntityCfg` để §B khi dựng scene multi-object.)
+- [x] Test: mở rộng `test_ur5e_rh5dg2_constants.py` + mới `test_dexgrasp_objects.py`.
 
 ## B. Scene & task skeleton
 
-- [ ] `SceneCfg`: bàn = box tĩnh (mặt bàn ~0.771 m, friction 0.2), UR5e mount
-  trên mặt bàn tại gốc, object entity dùng `VariantEntityCfg` (mỗi world một
-  mesh, chia đều).
+- [~] `SceneCfg`: bàn box tĩnh (top 0.771 m, friction 0.2) + **bục riêng** cho
+  UR5e (base flush mặt bàn z=0.771, khe ~8cm) + object. Fixed-base entity
+  auto-mocap → reset về env_origins. Arm menagerie actuator adopt qua
+  `XmlActuatorCfg` (action điều khiển đủ 24 khớp). Cả 5 object đã mesh-hóa →
+  `get_phase1_variant_cfg()` (VariantEntityCfg) dựng được. **Còn lại:** wire
+  variant vào scene (đặt object theo lowest_point từng world) → làm ở §C.
 - [ ] `ContactSensor`: palm + 3 link cuối mỗi ngón + 6 pad (match theo body
   regex), lấy `found`/`force` per-link so với object; sensor riêng cho
-  ngón↔bàn và arm↔{bàn, object}.
-- [ ] Sim cfg: `timestep=0.01`, `decimation=20` (policy 5 Hz), `impratio=10`,
-  `cone="elliptic"`, tăng `nconmax`/`njmax`; episode 70 bước (14 s).
-- [ ] Đăng ký task `Mjlab-DexGrasp-UR5eRH5DG2` qua `register_mjlab_task`.
+  ngón↔bàn và arm↔{bàn, object}. (→ §E cùng observations.)
+- [x] Sim cfg: `timestep=0.01`, `decimation=20`, `impratio=10`,
+  `cone="elliptic"`, `nconmax=150`/`njmax=1500`; episode 14 s (70 bước).
+- [x] Đăng ký task `Mjlab-DexGrasp-UR5eRH5DG2` qua `register_mjlab_task`.
 
 ## C. Reset & pre-grasp (event terms, CPU per-reset như bản gốc)
 
