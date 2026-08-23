@@ -338,6 +338,48 @@ def test_relative_joint_position_holds_target_across_substeps(
   entity.data.write_joint_position(anchor, joint_ids=action.target_ids)
 
 
+def test_relative_joint_position_clips_target_to_soft_limits(fixed_base_entity, device):
+  """With clip_to_joint_limits, the absolute target is clamped to soft limits."""
+  entity = fixed_base_entity
+  env = make_env(entity, "robot", device)
+
+  cfg = RelativeJointPositionActionCfg(
+    entity_name="robot",
+    actuator_names=("joint.*",),
+    scale=1.0,
+    clip_to_joint_limits=True,
+  )
+  action = cfg.build(env)
+  limits = entity.data.soft_joint_pos_limits[:, action.target_ids]
+
+  action.process_actions(torch.full((4, action.action_dim), 100.0, device=device))
+  action.apply_actions()
+  target = entity.data.joint_pos_target[:, action.target_ids]
+  assert torch.allclose(target, limits[..., 1], atol=1e-5)
+
+  action.process_actions(torch.full((4, action.action_dim), -100.0, device=device))
+  action.apply_actions()
+  target = entity.data.joint_pos_target[:, action.target_ids]
+  assert torch.allclose(target, limits[..., 0], atol=1e-5)
+
+
+def test_relative_joint_position_no_limit_clip_by_default(fixed_base_entity, device):
+  """Without the flag, the target is not clamped (preserves prior behavior)."""
+  entity = fixed_base_entity
+  env = make_env(entity, "robot", device)
+
+  cfg = RelativeJointPositionActionCfg(
+    entity_name="robot", actuator_names=("joint.*",), scale=1.0
+  )
+  action = cfg.build(env)
+  upper = entity.data.soft_joint_pos_limits[:, action.target_ids][..., 1]
+
+  action.process_actions(torch.full((4, action.action_dim), 100.0, device=device))
+  action.apply_actions()
+  target = entity.data.joint_pos_target[:, action.target_ids]
+  assert (target > upper).all()
+
+
 def test_relative_joint_position_offset_raises(floating_base_entity, device):
   """Setting offset on RelativeJointPositionActionCfg raises ValueError."""
   with pytest.raises(ValueError, match="offset"):

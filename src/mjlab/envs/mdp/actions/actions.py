@@ -233,8 +233,12 @@ class RelativeJointPositionActionCfg(BaseActionCfg):
   The ``offset`` field inherited from ``BaseActionCfg`` is not supported and
   must remain at its default of ``0.0``. The ``clip`` field is supported and
   clamps the delta (``action * scale``) before it is added to the current
-  position.
+  position. Set ``clip_to_joint_limits`` to additionally clamp the *absolute*
+  target to the entity's soft joint position limits (off by default).
   """
+
+  clip_to_joint_limits: bool = False
+  """Clamp the absolute target to the entity's soft joint position limits."""
 
   def __post_init__(self):
     self.transmission_type = TransmissionType.JOINT
@@ -259,11 +263,15 @@ class RelativeJointPositionAction(BaseAction):
   def __init__(self, cfg: RelativeJointPositionActionCfg, env: ManagerBasedRlEnv):
     super().__init__(cfg=cfg, env=env)
     self._target = torch.zeros(self.num_envs, self.action_dim, device=self.device)
+    self._clip_to_limits = cfg.clip_to_joint_limits
 
   def process_actions(self, actions: torch.Tensor) -> None:
     super().process_actions(actions)
     current_pos = self._entity.data.joint_pos[:, self._target_ids]
     self._target = current_pos + self._processed_actions
+    if self._clip_to_limits:
+      limits = self._entity.data.soft_joint_pos_limits[:, self._target_ids]
+      self._target = self._target.clamp(limits[..., 0], limits[..., 1])
 
   def apply_actions(self) -> None:
     self._entity.set_joint_position_target(self._target, joint_ids=self._target_ids)
