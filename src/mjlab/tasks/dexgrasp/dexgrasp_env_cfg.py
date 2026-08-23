@@ -96,6 +96,9 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       entity_name="robot",
       actuator_names=(".*",),
       scale=1.0,  # Override per-robot (arm 0.005 / finger 0.015).
+      # Clamp the absolute target to soft joint limits (fingers have no actuator
+      # ctrlrange to bound them; the delta itself stays unclipped -- see §D).
+      clip_to_joint_limits=True,
     )
   }
 

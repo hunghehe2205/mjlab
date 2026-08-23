@@ -80,10 +80,14 @@ assets: src/mjlab/asset_zoo/objects/dexgrasp/...
 
 ## D. Actions
 
-- [ ] `RelativeJointPositionActionCfg`, scale arm 0.005 / finger 0.015, clip
-  theo soft joint limits.
-- [ ] (Tùy chọn, bám gốc) random 1-step action delay — có thể bỏ ở teacher
-  phase 1, thêm ở student.
+- [x] `RelativeJointPositionActionCfg`, scale arm 0.005 / finger 0.015 (đã có ở
+  §B), + **soft-limit target clip**: thêm cờ opt-in `clip_to_joint_limits` cho
+  `RelativeJointPositionAction` (clamp *absolute target* về `soft_joint_pos_limits`;
+  delta vẫn không clip). Arm tự bound qua actuator ctrlrange; cờ này cần cho ngón.
+  Bật trong `make_dexgrasp_env_cfg`. Test `test_actions.py`: clamp khi bật, giữ
+  nguyên khi tắt (default off, không đổi hành vi task khác).
+- [ ] (Tùy chọn, bám gốc) random 1-step action delay — bỏ ở teacher phase 1,
+  thêm ở student (§ Phase 3).
 
 ## E. Observations (group `actor` = `critic`, đều privileged)
 

@@ -48,7 +48,9 @@ chấp nhận được ở Phase 1:
 4. `_wrist_penalty` **đối xứng** `abs(|w2|−1.57)` (trước chỉ min tại +1.57, mâu
    thuẫn seed HOME w2=−1.57). Test symmetric.
 5. RNG seed từ **global numpy** (mjlab `seed_rng` từ env seed) thay vì raw
-   `cfg.seed` (None → OS entropy). Test reproducible với global seed.
+   `cfg.seed` (None → OS entropy). Test reproducible với global seed. *Giới hạn
+   còn lại:* stream frozen lúc build → `env.reset(seed=N)` sau build KHÔNG reseed;
+   chỉ deterministic theo build-time / runner path (chấp nhận, như event mjlab khác).
 6. Spawn **+2mm clearance** (như gốc 0.773/0.771) tránh contact t=0.
 
 **Trap fix kèm theo:** `mj_name2id` guard −1 (`_require_id`); `__all__` cho
