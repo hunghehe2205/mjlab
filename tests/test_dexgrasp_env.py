@@ -56,6 +56,7 @@ def test_skeleton_builds_and_steps() -> None:
   assert not torch.isnan(actor_obs).any()
   assert base_z == pytest.approx(ARM_MOUNT_Z, abs=1e-3)
   obj = oc.PHASE1_OBJECTS[SKELETON_OBJECT]
-  assert obj_z == pytest.approx(TABLE_TOP_Z - obj.lowest_point, abs=1e-3)
+  # + 2 mm spawn clearance baked into the sampled pose.
+  assert obj_z == pytest.approx(TABLE_TOP_Z - obj.lowest_point + 0.002, abs=1e-3)
   for name, want in rc.INIT_FINGER_POSE.items():
     assert finger_q[name] == pytest.approx(want, abs=1e-3)

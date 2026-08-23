@@ -25,6 +25,8 @@ from mjlab.tasks.dexgrasp.pregrasp.pose_sampler import sample_object_pose
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
+__all__ = ["ResetGraspPose"]
+
 
 class ResetGraspPose:
   """Reset event: sampled object pose + IK pre-grasp arm pose."""
@@ -39,7 +41,9 @@ class ResetGraspPose:
     self._kin = ArmKinematics(mount_pos=(0.0, 0.0, float(p["mount_z"])))
     home = rc.HOME_KEYFRAME.joint_pos or {}
     self._seed = np.array([home[n] for n in rc.ARM_JOINT_NAMES])
-    self._rng = np.random.default_rng(env.cfg.seed)
+    # Seed from mjlab's global numpy RNG (seed_rng'd from the resolved env seed)
+    # rather than raw cfg.seed, which is None -> OS entropy when unset.
+    self._rng = np.random.default_rng(int(np.random.randint(0, 2**31 - 1)))
     robot = env.scene["robot"]
     self._arm_ids = [robot.joint_names.index(n) for n in rc.ARM_JOINT_NAMES]
 
@@ -58,23 +62,24 @@ class ResetGraspPose:
     obj = env.scene["object"]
 
     n = len(ids)
-    joint_pos = robot.data.default_joint_pos[ids].clone()
-    root_pose = torch.zeros((n, 7), device=device)
-    for row, i in enumerate(ids.tolist()):
-      del i
+    # Accumulate per-env numpy, then transfer to the device once (not per env).
+    arms = np.empty((n, 6))
+    poses = np.empty((n, 7))
+    for row in range(n):
       pose = sample_object_pose(self._rng, self._table_top_z, self._lowest)
       arm = generate_pregrasp(
         pose[:3], pose[3:7], self._mesh, self._pcd, self._kin, self._seed
       )
-      if arm is None:
-        arm = fallback_arm_qpos(pose[:3])
-      joint_pos[row, self._arm_ids] = torch.as_tensor(
-        arm, dtype=torch.float, device=device
-      )
-      root_pose[row, :3] = torch.as_tensor(pose[:3], dtype=torch.float, device=device)
-      root_pose[row, 3:7] = torch.as_tensor(pose[3:7], dtype=torch.float, device=device)
+      arms[row] = fallback_arm_qpos(pose[:3]) if arm is None else arm
+      poses[row] = pose
 
+    joint_pos = robot.data.default_joint_pos[ids]  # advanced-index copy
+    joint_pos[:, self._arm_ids] = torch.as_tensor(
+      arms, dtype=torch.float, device=device
+    )
+    root_pose = torch.as_tensor(poses, dtype=torch.float, device=device)
     root_pose[:, :3] += env.scene.env_origins[ids]
+
     obj.write_root_link_pose_to_sim(root_pose, env_ids=ids)
     obj.write_root_link_velocity_to_sim(torch.zeros((n, 6), device=device), env_ids=ids)
     robot.write_joint_state_to_sim(joint_pos, torch.zeros_like(joint_pos), env_ids=ids)

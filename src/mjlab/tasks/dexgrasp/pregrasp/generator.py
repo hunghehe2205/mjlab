@@ -75,12 +75,20 @@ def generate_pregrasp(
 
 
 def _wrist_penalty(arm_qpos: np.ndarray) -> float:
-  """Prefer a wrist_2 near +/-pi/2 (UR5 baseline; index 4 = wrist_2_joint)."""
-  w2 = arm_qpos[4]
-  return abs(w2 - 1.57) * ANGLE_COEFF + (abs(w2) - 3.2) * ANGLE_COEFF * 0.5
+  """Prefer |wrist_2| near pi/2, either sign (index 4 = wrist_2_joint).
+
+  Symmetric so it agrees with whichever branch the seed selects; the HOME seed
+  has wrist_2 = -pi/2, so a one-sided +pi/2 preference would fight the seed.
+  """
+  return abs(abs(arm_qpos[4]) - 1.57) * ANGLE_COEFF
 
 
 def fallback_arm_qpos(obj_pos: np.ndarray) -> np.ndarray:
-  """Canonical arm pose facing the object when IK fails (train.py fallback)."""
+  """Canonical arm pose facing the object when IK fails.
+
+  Re-derived for this base frame (Rz(180) vs the reference UR5's Rz(90)): the
+  grasp-center azimuth trails shoulder_pan by ~180 deg, so aim shoulder_pan at
+  the object azimuth + pi (keeping the reference's -0.3 approach offset).
+  """
   angle = atan2(obj_pos[1], obj_pos[0])
-  return np.array([angle + pi / 2 - 0.3, -1.57, 1.57, 0.0, 1.57, -1.57])
+  return np.array([angle + pi - 0.3, -1.57, 1.57, 0.0, 1.57, -1.57])

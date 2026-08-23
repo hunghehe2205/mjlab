@@ -30,6 +30,14 @@ def _inv_T(T: np.ndarray) -> np.ndarray:
   return out
 
 
+def _require_id(model: mujoco.MjModel, objtype: mujoco.mjtObj, name: str) -> int:
+  """mj_name2id that raises instead of returning a silent -1."""
+  idx = mujoco.mj_name2id(model, objtype, name)
+  if idx < 0:
+    raise ValueError(f"{objtype!r} '{name}' not found in model")
+  return idx
+
+
 class ArmKinematics:
   """Grasp-center <-> arm-qpos mapping for a mount-raised UR5e."""
 
@@ -44,11 +52,9 @@ class ArmKinematics:
         for n in rc.ARM_JOINT_NAMES
       ]
     )
-    self._gc = mujoco.mj_name2id(
-      self._model, mujoco.mjtObj.mjOBJ_SITE, _GRASP_CENTER_SITE
-    )
-    self._fl = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_SITE, _FLANGE_SITE)
-    self._bid = mujoco.mj_name2id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base")
+    self._gc = _require_id(self._model, mujoco.mjtObj.mjOBJ_SITE, _GRASP_CENTER_SITE)
+    self._fl = _require_id(self._model, mujoco.mjtObj.mjOBJ_SITE, _FLANGE_SITE)
+    self._bid = _require_id(self._model, mujoco.mjtObj.mjOBJ_BODY, "base")
     self._mount = np.asarray(mount_pos, dtype=float)
     self._ik = InverseKinematicsUR5e()
 

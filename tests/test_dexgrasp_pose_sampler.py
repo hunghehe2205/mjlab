@@ -23,7 +23,8 @@ def test_sample_object_pose_respects_polar_constraints():
     assert 0.45 - _EPS <= r <= 0.75 + _EPS
     assert -0.7 * np.pi - _EPS <= angle <= -0.3 * np.pi + _EPS
     assert abs(x) < 0.25
-    assert z == pytest.approx(0.771 + 0.03)
+    # Table top - lowest_point + 2 mm spawn clearance (avoids t=0 tangent contact).
+    assert z == pytest.approx(0.771 + 0.03 + 0.002)
     assert p[4] == pytest.approx(0.0) and p[5] == pytest.approx(0.0)
     assert float(np.linalg.norm(p[3:7])) == pytest.approx(1.0)
 

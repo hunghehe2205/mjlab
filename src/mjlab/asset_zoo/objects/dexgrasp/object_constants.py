@@ -100,12 +100,17 @@ class DexGraspObject:
     return np.load(self.npz_path)["points"]
 
   def load_affordance_mesh(self) -> trimesh.Trimesh:
-    """Collision-hull mesh (object frame) for the pre-grasp visibility raycast."""
+    """Convex-hull mesh (object frame) for the pre-grasp visibility raycast.
+
+    Returns the hull, not the raw mesh: MuJoCo collides with the hull and the
+    affordance cloud is sampled on it, so camera rays must hit the hull too --
+    on the raw mesh, concavities make ~6% of rays miss.
+    """
     mesh = trimesh.load_mesh(str(ASSETS_DIR / self.name / "collision.obj"))
     if isinstance(mesh, trimesh.Scene):
       mesh = mesh.dump(concatenate=True)
     assert isinstance(mesh, trimesh.Trimesh)
-    return mesh
+    return mesh.convex_hull
 
   def get_entity_cfg(self) -> EntityCfg:
     return EntityCfg(spec_fn=self.spec_fn)

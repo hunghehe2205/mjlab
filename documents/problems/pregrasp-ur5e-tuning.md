@@ -36,6 +36,38 @@ chấp nhận được ở Phase 1:
 `get_spec_arm_hand_collision()` cho ur5e_rh5dg2 + probe resample (port
 `SelfCollisionProbe`). Contact sensor arm ở §E cũng có thể dùng để reject sau reset.
 
+## 2b. Deep-review §C (19 finding) — đợt fix
+
+**6 bug behavioral đã fix + test (đều verify bằng probe trước khi sửa):**
+1. `load_affordance_mesh` trả **convex_hull** (trước trả raw → ~6% ray miss vì
+   concavity; cloud & MuJoCo collision đều trên hull). Test `is_convex`.
+2. `ik_ur5e.closest()` **wrap delta về (−π,π]** trước weighted-sum (trước chọn
+   nhầm branch ~4.3%). Test: seed +2π/khớp phải trả đúng branch.
+3. `fallback_arm_qpos` re-derive `angle + π − 0.3` (base Rz(180) vs UR5 Rz(90);
+   trước gc quay lưng object, az lệch ~94°). Test: gc cùng phía + gần object.
+4. `_wrist_penalty` **đối xứng** `abs(|w2|−1.57)` (trước chỉ min tại +1.57, mâu
+   thuẫn seed HOME w2=−1.57). Test symmetric.
+5. RNG seed từ **global numpy** (mjlab `seed_rng` từ env seed) thay vì raw
+   `cfg.seed` (None → OS entropy). Test reproducible với global seed.
+6. Spawn **+2mm clearance** (như gốc 0.773/0.771) tránh contact t=0.
+
+**Trap fix kèm theo:** `mj_name2id` guard −1 (`_require_id`); `__all__` cho
+`mdp/events.py` (chặn star-export lộ np/torch/oc/rc); reset loop batch H2D +
+bỏ `.clone()` thừa; bump IK round-trip test 40→100 pose.
+
+**Deferred (không phải bug, có lý do — chờ §E/§F hoặc design pass):**
+- **Scene geometry 3 nguồn** (`TABLE_CENTER` / polar band / `CAMERA_POSITION`):
+  consolidate về 1 source — design refactor, làm khi wire variant/scene §B[~].
+- **object_name không couple scene entity**: gắn với chuyển single→variant.
+- **params double-contract** `ResetGraspPose.__call__`: là idiom event mjlab
+  (cfg.params đọc ở init), không sửa.
+- **elbow soft-limit không clamp** (latent, 0/200 trong band Phase 1): revisit
+  Phase 2 khi band rộng hơn.
+- **trimesh trên import path (~0.2s)** + **dup `_inv_T`** + **`_quat2mat` DIY**:
+  perf/cosmetic, để pass cleanup riêng (scipy quat xyzw≠wxyz → không đổi vội).
+- **DH 0.0997/0.0996 vs model 0.1/0.1**: `_E`/`_ARG_TOL` hấp thụ, FK ≤0.5mm —
+  informational, không phải bug.
+
 ## 3. Đã xử lý (không phải vấn đề mở)
 
 - **DH residual 0.5mm**: IK dùng DH fit theo MJCF (không textbook), `_ARG_TOL=1e-2`

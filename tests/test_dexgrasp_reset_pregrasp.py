@@ -19,6 +19,7 @@ from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
 from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import TABLE_TOP_Z
 from mjlab.tasks.dexgrasp.pregrasp.generator import CAMERA_POSITION
 from mjlab.tasks.dexgrasp.pregrasp.kinematics import ArmKinematics
+from mjlab.utils.random import seed_rng
 
 
 @pytest.mark.slow
@@ -43,9 +44,11 @@ def test_reset_places_arm_at_pregrasp():
       env.close()
 
   assert no_nan
-  # Object rests on the table (z unchanged by xy sampling).
+  # Object rests on the table with the 2 mm spawn clearance (z fixed by sampler).
   low = oc.PHASE1_OBJECTS[SKELETON_OBJECT].lowest_point
-  assert torch.allclose(obj_w[:, 2], torch.full((4,), TABLE_TOP_Z - low), atol=1e-3)
+  assert torch.allclose(
+    obj_w[:, 2], torch.full((4,), TABLE_TOP_Z - low + 0.002), atol=1e-3
+  )
 
   # The in-sim grasp-center site matches the IK prediction for the written arm
   # qpos (validates the joint-index + env-frame wiring end to end).
@@ -59,3 +62,25 @@ def test_reset_places_arm_at_pregrasp():
     gc_local = gc_w[e] - origins[e]
     obj_local = obj_w[e] - origins[e]
     assert torch.norm(gc_local - cam) < torch.norm(obj_local - cam)
+
+
+def _reset_object_xy() -> torch.Tensor:
+  seed_rng(123)  # seed mjlab's global RNG before building
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg.scene.num_envs = 2
+  cfg.seed = None  # env skips its own seeding; sampling must follow the global RNG
+  with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+      env = ManagerBasedRlEnv(cfg, device="cpu")
+      env.reset()
+      xy = env.scene["object"].data.root_link_pos_w[:, :2].clone()
+      env.close()
+  return xy
+
+
+@pytest.mark.slow
+def test_reset_sampling_ties_to_global_seed():
+  """cfg.seed=None must not silently fall back to OS entropy: identical global
+  seeding gives identical sampled object poses."""
+  assert torch.allclose(_reset_object_xy(), _reset_object_xy())

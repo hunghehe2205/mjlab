@@ -13,6 +13,7 @@ import pytest
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
 from mjlab.tasks.dexgrasp.pregrasp.ik_ur5e import (
   InverseKinematicsUR5e,
+  fk_dh,
   solve_arm_qpos,
 )
 
@@ -64,7 +65,7 @@ def _sample_nonsingular(rng: np.random.Generator) -> np.ndarray:
 def test_ik_roundtrips_against_mujoco_fk(fk):
   rng = np.random.default_rng(0)
   ik = InverseKinematicsUR5e()
-  for _ in range(40):
+  for _ in range(100):
     q = _sample_nonsingular(rng)
     target = fk(q)
     sol = solve_arm_qpos(target, seed=q, ik=ik)
@@ -92,3 +93,21 @@ def test_ik_returns_none_when_unreachable(fk):
   target = fk(np.zeros(6))
   target[0, 3] += 5.0  # 5 m outside the workspace
   assert solve_arm_qpos(target, seed=np.zeros(6)) is None
+
+
+def test_closest_uses_wrapped_angular_distance():
+  """A seed offset by +2*pi on one joint is the same config; closest() must
+  return that branch, not a numerically-nearer wrong branch."""
+  ik = InverseKinematicsUR5e()
+  gd = fk_dh(np.array([0.3, -1.0, 1.2, 0.2, 0.8, 0.5]))
+  Q = ik.solve(gd)
+  assert Q is not None and len(Q) >= 2
+  two_pi = 2 * np.pi
+  for k in range(len(Q)):
+    for j in range(6):
+      seed = Q[k].copy()
+      seed[j] += two_pi  # physically identical to Q[k]
+      sol = ik.closest(gd, seed)
+      assert sol is not None
+      wrapped = np.abs((sol - Q[k] + np.pi) % two_pi - np.pi)
+      assert wrapped.max() < 1e-6, f"wrong branch for k={k}, j={j}"

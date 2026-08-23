@@ -12,6 +12,14 @@ from mjlab.entity import Entity
 OBJECT_NAMES = tuple(oc.PHASE1_OBJECTS)
 
 
+@pytest.mark.parametrize("name", ("potted_meat_can", "sugar_box", "box"))
+def test_load_affordance_mesh_matches_collision_hull(name: str) -> None:
+  """Visibility raycast must hit the same hull MuJoCo collides with, and where
+  the affordance cloud was sampled -- else camera rays miss on raw concavities."""
+  mesh = oc.PHASE1_OBJECTS[name].load_affordance_mesh()
+  assert mesh.is_convex
+
+
 @pytest.mark.parametrize("name", OBJECT_NAMES)
 def test_object_spec_compiles(name: str) -> None:
   obj = oc.PHASE1_OBJECTS[name]

@@ -157,7 +157,10 @@ class InverseKinematicsUR5e:
     Q = self.solve(gd)
     if Q is None:
       return None
-    delta = np.abs(Q - np.asarray(seed, dtype=float)) * self._w
+    # Wrap to (-pi, pi] so a branch near -pi is not seen as ~2*pi from a seed
+    # near +pi (both are normalized into [-pi, pi]).
+    diff = (Q - np.asarray(seed, dtype=float) + np.pi) % (2 * np.pi) - np.pi
+    delta = np.abs(diff) * self._w
     return Q[int(np.argmin(delta.sum(axis=1)))]
 
 

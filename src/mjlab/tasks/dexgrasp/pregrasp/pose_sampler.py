@@ -24,8 +24,13 @@ def sample_object_pose(
   table_top_z: float,
   lowest_point: float,
   non_uniform: bool = False,
+  clearance: float = 0.002,
 ) -> np.ndarray:
-  """Polar tabletop pose as pos3 + wxyz quat (7,), resting on the table top."""
+  """Polar tabletop pose as pos3 + wxyz quat (7,), resting on the table top.
+
+  ``clearance`` lifts the object 2 mm off the table (as in RobustDexGrasp) so a
+  tangent spawn does not fire a contact impulse at t=0.
+  """
 
   def uniform_xy() -> tuple[float, float]:
     while True:
@@ -50,7 +55,7 @@ def sample_object_pose(
 
   yaw = rng.uniform(-np.pi, np.pi)
   pose = np.zeros(7)
-  pose[0], pose[1], pose[2] = x, y, table_top_z - lowest_point
+  pose[0], pose[1], pose[2] = x, y, table_top_z - lowest_point + clearance
   pose[3] = np.cos(yaw / 2.0)  # qw
   pose[6] = np.sin(yaw / 2.0)  # qz (rotation about world z)
   return pose
