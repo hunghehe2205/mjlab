@@ -17,7 +17,6 @@ from mjlab.envs.mdp.actions import RelativeJointPositionActionCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
-from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 from mjlab.scene import SceneCfg
@@ -27,16 +26,18 @@ from mjlab.terrains import TerrainEntityCfg
 from mjlab.viewer import ViewerConfig
 
 ##
-# Scene geometry (world frame). Table top and pedestal top are flush; the arm
-# base mounts on the pedestal at ``ARM_MOUNT_Z``. Tunable in the viewer.
+# Scene geometry (world frame). The arm base sits 4 cm below the tabletop so
+# the wrist/hand are visually centred at the table height in the pre-grasp view.
 ##
 
 TABLE_TOP_Z = 0.771
-ARM_MOUNT_Z = 0.771  # Arm base height (pedestal top, flush with the table top).
+ARM_MOUNT_Z = TABLE_TOP_Z - 0.04
 TABLE_FRICTION = 0.2
 
-TABLE_HALF = (0.40, 0.35, TABLE_TOP_Z / 2)
-TABLE_CENTER = (0.0, -0.55, TABLE_TOP_Z / 2)
+# 1.2 m x 1.1 m table. Keep its near edge at y=-0.2 so it remains separated
+# from the pedestal while expanding the usable area away from the robot.
+TABLE_HALF = (0.60, 0.55, TABLE_TOP_Z / 2)
+TABLE_CENTER = (0.0, -0.75, TABLE_TOP_Z / 2)
 PEDESTAL_HALF = (0.12, 0.12, ARM_MOUNT_Z / 2)
 PEDESTAL_CENTER = (0.0, 0.0, ARM_MOUNT_Z / 2)
 
@@ -80,9 +81,41 @@ def get_arena_spec() -> mujoco.MjSpec:
 
 def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
   actor_terms = {
-    "joint_pos": ObservationTermCfg(func=mdp.joint_pos_rel),
-    "joint_vel": ObservationTermCfg(func=mdp.joint_vel_rel),
-    "actions": ObservationTermCfg(func=mdp.last_action),
+    "joint_pos": ObservationTermCfg(
+      func=mdp.joint_pos,
+      params={"asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "pd_error": ObservationTermCfg(
+      func=mdp.pd_error,
+      params={"action_name": "joint_pos", "asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "contacts": ObservationTermCfg(
+      func=mdp.HandObjectContacts,
+      params={"sensor_name": "hand_object_contact"},
+    ),
+    "keypoint_heights": ObservationTermCfg(
+      func=mdp.link_heights,
+      params={"table_top_z": TABLE_TOP_Z, "asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "arm_link_heights": ObservationTermCfg(
+      func=mdp.link_heights,
+      params={"table_top_z": TABLE_TOP_Z, "asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "hand_center": ObservationTermCfg(
+      func=mdp.hand_center_pos,
+      params={"asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "wrist_orientation": ObservationTermCfg(
+      func=mdp.WristOrientation,
+      params={"asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "af_vec": ObservationTermCfg(
+      func=mdp.AffordanceVectors,
+      params={
+        "asset_cfg": SceneEntityCfg("robot"),
+        "object_entity": "object",
+      },
+    ),
   }
   # Teacher obs are privileged and clean; corruption is on (repo convention) but
   # no term has a noise model, so it is a no-op. Critic = actor (both privileged).
@@ -134,9 +167,7 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
     ),
   }
 
-  rewards = {
-    "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.01),
-  }
+  rewards = {}  # §F reward stack is wired per-robot in config/<robot>/env_cfgs.py.
 
   terminations = {
     "time_out": TerminationTermCfg(func=mdp.time_out, time_out=True),
@@ -178,4 +209,6 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
     ),
     decimation=DECIMATION,
     episode_length_s=EPISODE_LENGTH_S,
+    scale_rewards_by_dt=False,  # Reference rewards are per control step.
+    reward_clip_min=-2.0,  # Reference total-reward floor.
   )

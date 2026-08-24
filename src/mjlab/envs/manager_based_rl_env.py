@@ -162,6 +162,9 @@ class ManagerBasedRlEnvCfg:
   algorithms that expect unscaled reward signals (e.g., HER, static reward scaling).
   """
 
+  reward_clip_min: float | None = None
+  """Lower clamp on the total reward per step (applied after summation)."""
+
 
 class ManagerBasedRlEnv:
   """Manager-based RL environment."""
@@ -454,6 +457,8 @@ class ManagerBasedRlEnv:
     self.reset_time_outs = self.termination_manager.time_outs
 
     self.reward_buf = self.reward_manager.compute(dt=self.step_dt)
+    if self.cfg.reward_clip_min is not None:
+      self.reward_buf = self.reward_buf.clamp_min(self.cfg.reward_clip_min)
     self.metrics_manager.compute()
 
     # Events fire before auto-reset, on the terminal state, matching the

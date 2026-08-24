@@ -265,6 +265,17 @@ class RelativeJointPositionAction(BaseAction):
     self._target = torch.zeros(self.num_envs, self.action_dim, device=self.device)
     self._clip_to_limits = cfg.clip_to_joint_limits
 
+  @property
+  def target(self) -> torch.Tensor:
+    """Absolute joint targets anchored for the current control step."""
+    return self._target
+
+  def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+    """Anchor the target to the current qpos so the post-reset PD error is zero."""
+    super().reset(env_ids)
+    ids = slice(None) if env_ids is None else env_ids
+    self._target[ids] = self._entity.data.joint_pos[ids][:, self._target_ids]
+
   def process_actions(self, actions: torch.Tensor) -> None:
     super().process_actions(actions)
     current_pos = self._entity.data.joint_pos[:, self._target_ids]
