@@ -80,9 +80,41 @@ def get_arena_spec() -> mujoco.MjSpec:
 
 def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
   actor_terms = {
-    "joint_pos": ObservationTermCfg(func=mdp.joint_pos_rel),
-    "joint_vel": ObservationTermCfg(func=mdp.joint_vel_rel),
-    "actions": ObservationTermCfg(func=mdp.last_action),
+    "joint_pos": ObservationTermCfg(
+      func=mdp.joint_pos,
+      params={"asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "pd_error": ObservationTermCfg(
+      func=mdp.pd_error,
+      params={"action_name": "joint_pos", "asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "contacts": ObservationTermCfg(
+      func=mdp.HandObjectContacts,
+      params={"sensor_name": "hand_object_contact"},
+    ),
+    "keypoint_heights": ObservationTermCfg(
+      func=mdp.link_heights,
+      params={"table_top_z": TABLE_TOP_Z, "asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "arm_link_heights": ObservationTermCfg(
+      func=mdp.link_heights,
+      params={"table_top_z": TABLE_TOP_Z, "asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "hand_center": ObservationTermCfg(
+      func=mdp.hand_center_pos,
+      params={"asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "wrist_orientation": ObservationTermCfg(
+      func=mdp.WristOrientation,
+      params={"asset_cfg": SceneEntityCfg("robot")},
+    ),
+    "af_vec": ObservationTermCfg(
+      func=mdp.AffordanceVectors,
+      params={
+        "asset_cfg": SceneEntityCfg("robot"),
+        "object_entity": "object",
+      },
+    ),
   }
   # Teacher obs are privileged and clean; corruption is on (repo convention) but
   # no term has a noise model, so it is a no-op. Critic = actor (both privileged).

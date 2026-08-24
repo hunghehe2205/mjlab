@@ -127,6 +127,70 @@ FINGER_JOINT_NAMES = (
 # Palm-local grasp reference site (hand_center analog).
 GRASP_CENTER_SITE = "grasp_center"
 
+# Hand body frames for the teacher observation: wrist, then per finger the
+# joint bodies followed by the fingertip pad. 24 total.
+KEYPOINT_BODIES = (
+  "right_hand",
+  "R_thumb_yaw",
+  "R_thumb_mcp",
+  "R_thumb_pip",
+  "R_thumb_dip",
+  "R_thumb_force_sensor",
+  "R_index_yaw",
+  "R_index_mcp",
+  "R_index_pip",
+  "R_index_dip",
+  "R_index_force_sensor",
+  "R_middle_yaw",
+  "R_middle_mcp",
+  "R_middle_pip",
+  "R_middle_dip",
+  "R_middle_force_sensor",
+  "R_ring_mcp",
+  "R_ring_pip",
+  "R_ring_dip",
+  "R_ring_force_sensor",
+  "R_pinky_mcp",
+  "R_pinky_pip",
+  "R_pinky_dip",
+  "R_pinky_force_sensor",
+)
+
+# Contact bodies for the contact/impulse observation: palm plus the three
+# distal links of each finger. The pad bodies are fixed children of the dip
+# links (and of the palm), so body-subtree contact sensors see pad contacts.
+CONTACT_BODIES = (
+  "R_hand_palm",
+  "R_thumb_mcp",
+  "R_thumb_pip",
+  "R_thumb_dip",
+  "R_index_mcp",
+  "R_index_pip",
+  "R_index_dip",
+  "R_middle_mcp",
+  "R_middle_pip",
+  "R_middle_dip",
+  "R_ring_mcp",
+  "R_ring_pip",
+  "R_ring_dip",
+  "R_pinky_mcp",
+  "R_pinky_pip",
+  "R_pinky_dip",
+)
+
+# Arm bodies whose frames give the 6 arm-link heights above the table.
+ARM_LINK_BODIES = (
+  "shoulder_link",
+  "upper_arm_link",
+  "forearm_link",
+  "wrist_1_link",
+  "wrist_2_link",
+  "wrist_3_link",
+)
+
+# All actuated joints in action/observation order (arm then fingers).
+ALL_JOINT_NAMES = ARM_JOINT_NAMES + FINGER_JOINT_NAMES
+
 # Per-step delta-action scale (RobustDexGrasp: arm 0.005, finger 0.015 rad).
 ACTION_SCALE_ARM = 0.005
 ACTION_SCALE_FINGER = 0.015

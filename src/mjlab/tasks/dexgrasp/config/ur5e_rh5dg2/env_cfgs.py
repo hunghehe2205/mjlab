@@ -10,9 +10,12 @@ from mjlab.entity import EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp.actions import RelativeJointPositionActionCfg
 from mjlab.managers.event_manager import EventTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
+from mjlab.sensor import ContactMatch, ContactSensorCfg
 from mjlab.tasks.dexgrasp import mdp
 from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import (
   ARM_MOUNT_Z,
+  DECIMATION,
   TABLE_TOP_Z,
   make_dexgrasp_env_cfg,
 )
@@ -57,11 +60,48 @@ def get_skeleton_object_cfg(name: str) -> EntityCfg:
   return EntityCfg(init_state=init_state, spec_fn=obj.spec_fn)
 
 
+def get_hand_object_contact_sensor() -> ContactSensorCfg:
+  """Hand-vs-object contact sensor over the 16 contact bodies.
+
+  Literal compiled names keep the canonical CONTACT_BODIES order on the
+  per-primary axis; net-force + history accumulates one impulse vector per
+  body over the control step's substeps.
+  """
+  return ContactSensorCfg(
+    name="hand_object_contact",
+    primary=ContactMatch(
+      mode="body",
+      pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in rc.CONTACT_BODIES),
+    ),
+    secondary=ContactMatch(mode="subtree", pattern="object", entity="object"),
+    fields=("force", "found"),
+    reduce="netforce",
+    history_length=DECIMATION,
+  )
+
+
 def dexgrasp_ur5e_rh5dg2_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   cfg = make_dexgrasp_env_cfg()
 
   cfg.scene.entities["robot"] = get_dexgrasp_robot_cfg()
   cfg.scene.entities["object"] = get_skeleton_object_cfg(SKELETON_OBJECT)
+  cfg.scene.sensors = cfg.scene.sensors + (get_hand_object_contact_sensor(),)
+
+  # Per-robot observation scopes.
+  actor_terms = cfg.observations["actor"].terms
+  joints = SceneEntityCfg("robot", joint_names=rc.ALL_JOINT_NAMES)
+  keypoints = SceneEntityCfg("robot", body_names=rc.KEYPOINT_BODIES)
+  arm_links = SceneEntityCfg("robot", body_names=rc.ARM_LINK_BODIES)
+  wrist = SceneEntityCfg("robot", body_names=("right_hand",))
+  hand_center = SceneEntityCfg("robot", site_names=(rc.GRASP_CENTER_SITE,))
+  actor_terms["joint_pos"].params["asset_cfg"] = joints
+  actor_terms["pd_error"].params["asset_cfg"] = joints
+  actor_terms["keypoint_heights"].params["asset_cfg"] = keypoints
+  actor_terms["arm_link_heights"].params["asset_cfg"] = arm_links
+  actor_terms["hand_center"].params["asset_cfg"] = hand_center
+  actor_terms["wrist_orientation"].params["asset_cfg"] = wrist
+  actor_terms["af_vec"].params["asset_cfg"] = keypoints
+  actor_terms["af_vec"].params["object_name"] = SKELETON_OBJECT
 
   action = cfg.actions["joint_pos"]
   assert isinstance(action, RelativeJointPositionActionCfg)
