@@ -28,7 +28,7 @@ def test_task_registered() -> None:
 
 @pytest.mark.slow
 def test_skeleton_builds_and_steps() -> None:
-  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
   cfg.scene.num_envs = 2
   with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -60,3 +60,48 @@ def test_skeleton_builds_and_steps() -> None:
   assert obj_z == pytest.approx(TABLE_TOP_Z - obj.lowest_point + 0.002, abs=1e-3)
   for name, want in rc.INIT_FINGER_POSE.items():
     assert finger_q[name] == pytest.approx(want, abs=1e-3)
+
+
+@pytest.mark.slow
+def test_play_object_stays_fixed() -> None:
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(play=True, object_name=SKELETON_OBJECT)
+  with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+      env = ManagerBasedRlEnv(cfg, device="cpu")
+      env.reset()
+      obj = env.scene["object"]
+      robot = env.scene["robot"]
+      start = obj.data.root_link_pose_w.clone()
+      arm_start = robot.data.joint_pos[0, :6].clone()
+      for _ in range(10):
+        env.step(torch.zeros(env.num_envs, 24))
+      end = obj.data.root_link_pose_w
+      env.close()
+
+  assert torch.allclose(end, start, atol=1e-6)
+  home = rc.HOME_KEYFRAME.joint_pos or {}
+  assert not torch.allclose(
+    arm_start, torch.tensor([home[name] for name in rc.ARM_JOINT_NAMES])
+  )
+
+
+@pytest.mark.slow
+def test_baseline_cohort_steps_with_per_world_variants() -> None:
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg.scene.num_envs = 8
+  with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+      env = ManagerBasedRlEnv(cfg, device="cpu")
+      obs, _ = env.reset()
+      obs, reward, _, _, _ = env.step(torch.zeros(env.num_envs, 24))
+      variant_ids = env.sim.world_to_variant["object"].clone()
+      env.close()
+
+  actor_obs = obs["actor"]
+  assert isinstance(actor_obs, torch.Tensor)
+  assert actor_obs.shape == (8, 191)
+  assert torch.isfinite(actor_obs).all()
+  assert torch.isfinite(reward).all()
+  assert variant_ids.unique().numel() > 1

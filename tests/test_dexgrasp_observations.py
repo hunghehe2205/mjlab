@@ -52,7 +52,7 @@ def test_af_vec_rotates_to_world_frame() -> None:
 
 @pytest.mark.slow
 def test_teacher_obs_shape_and_contacts() -> None:
-  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name="potted_meat_can")
   cfg.scene.num_envs = 2
   with warnings.catch_warnings():
     warnings.simplefilter("ignore")

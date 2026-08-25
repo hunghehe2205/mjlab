@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import tyro
 
+import mjlab
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
 from mjlab.envs import ManagerBasedRlEnv
@@ -122,7 +123,9 @@ def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
   configure_torch_backends()
   device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
   agent_cfg = dexgrasp_teacher_ppo_runner_cfg()
-  bootstrap_cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  bootstrap_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(
+    object_name=oc.ROBUST_DEXGRASP_TRAIN_OBJECTS[0]
+  )
   bootstrap_cfg.scene.num_envs = 1
   bootstrap_cfg.terminations = {}
   bootstrap_cfg.auto_reset = False
@@ -134,7 +137,8 @@ def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
   vec_env.close()
 
   metrics = {
-    name: run_object_evaluation(name, cfg, policy, device) for name in oc.PHASE1_OBJECTS
+    name: run_object_evaluation(name, cfg, policy, device)
+    for name in oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
   }
   for name, success_rate in metrics.items():
     print(f"{name}: {success_rate:.1%} lift success")
@@ -145,7 +149,7 @@ def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
 
 
 def main() -> None:
-  run_evaluate(tyro.cli(EvaluateConfig))
+  run_evaluate(tyro.cli(EvaluateConfig, config=mjlab.TYRO_FLAGS))
 
 
 if __name__ == "__main__":

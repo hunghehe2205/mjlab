@@ -33,6 +33,9 @@ class ExportSceneCfg:
   zip: bool = False
   """Compress into a zip archive."""
 
+  play: bool = False
+  """Export the static play scene when available."""
+
 
 def export_scene(cfg: ExportSceneCfg) -> None:
   """Export a task scene or entity to a directory."""
@@ -40,7 +43,7 @@ def export_scene(cfg: ExportSceneCfg) -> None:
   target = ENTITY_ALIASES.get(cfg.target, cfg.target)
 
   if target in task_ids:
-    env_cfg = load_env_cfg(target)
+    env_cfg = load_env_cfg(target, play=cfg.play)
     scene = Scene(env_cfg.scene, device="cpu")
   elif ":" in target:
     try:

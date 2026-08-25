@@ -1,5 +1,7 @@
 """Tests for DexGrasp Phase 1 object assets."""
 
+from typing import cast
+
 import mujoco
 import numpy as np
 import pytest
@@ -79,3 +81,17 @@ def test_phase1_variant_cfg_builds() -> None:
   model = entity.spec.compile()
   assert entity.variant_metadata is not None
   assert model.nmesh == len(OBJECT_NAMES)
+
+
+def test_robustdexgrasp_training_cohort_matches_baseline() -> None:
+  names = oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
+  cfg = oc.get_robustdexgrasp_variant_cfg()
+  assert len(names) == 35
+  assert oc.ROBUST_DEXGRASP_BASELINE_NUM_ENVS == 88
+  assert set(names) == set(oc.ROBUST_DEXGRASP_SOURCES)
+  assert isinstance(cfg.assignment, dict)
+  assignment = cast(dict[str, float], cfg.assignment)
+  assert sum(assignment.values()) == 44.0
+  assert assignment["scissors"] == 3.0
+  assert assignment["off_water_body"] == 3.0
+  assert assignment["banana"] == 2.0

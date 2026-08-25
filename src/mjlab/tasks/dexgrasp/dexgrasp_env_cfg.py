@@ -32,7 +32,8 @@ from mjlab.viewer import ViewerConfig
 
 TABLE_TOP_Z = 0.771
 ARM_MOUNT_Z = TABLE_TOP_Z - 0.04
-TABLE_FRICTION = 0.2
+# Standard tabletop friction.
+TABLE_FRICTION = 1.0
 
 # 1.2 m x 1.1 m table. Keep its near edge at y=-0.2 so it remains separated
 # from the pedestal while expanding the usable area away from the robot.
@@ -57,9 +58,8 @@ def get_arena_spec() -> mujoco.MjSpec:
   spec.add_material(name="table", rgba=_TABLE_RGBA)
   spec.add_material(name="pedestal", rgba=_PEDESTAL_RGBA)
   body = spec.worldbody.add_body(name="arena")
-  # priority=1 so the table's low friction wins over contacting geoms; equal
-  # priority would take the element-wise max, letting the object's default 1.0
-  # override the intended 0.2.
+  # Priority makes the tabletop's contact properties apply consistently to
+  # every object mesh, rather than inheriting per-object defaults.
   body.add_geom(
     name="table",
     type=mujoco.mjtGeom.mjGEOM_BOX,

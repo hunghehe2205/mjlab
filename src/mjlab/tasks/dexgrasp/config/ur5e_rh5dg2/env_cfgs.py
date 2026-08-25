@@ -35,7 +35,6 @@ ACTION_SCALE = {
   r"R_.*": rc.ACTION_SCALE_FINGER,
 }
 
-# §B skeleton: one fixed object on the table (multi-object VariantEntityCfg in §C+).
 SKELETON_OBJECT = "potted_meat_can"
 OBJECT_XY = (0.0, -0.6)  # Polar r~0.6, theta=-0.5pi (in the sampling region).
 
@@ -58,12 +57,24 @@ def get_dexgrasp_robot_cfg() -> EntityCfg:
   )
 
 
-def get_skeleton_object_cfg(name: str) -> EntityCfg:
+def get_skeleton_object_cfg(name: str, fixed: bool = False) -> EntityCfg:
   obj = oc.PHASE1_OBJECTS[name]
   init_state = EntityCfg.InitialStateCfg(
     pos=(OBJECT_XY[0], OBJECT_XY[1], TABLE_TOP_Z - obj.lowest_point),
   )
-  return EntityCfg(init_state=init_state, spec_fn=obj.spec_fn)
+  return EntityCfg(
+    init_state=init_state,
+    spec_fn=lambda: oc.get_mesh_object_spec(name, fixed=fixed),
+  )
+
+
+def get_dexgrasp_object_cfg(object_names: tuple[str, ...]) -> EntityCfg:
+  """Create a fixed object or a per-world mesh-variant object entity."""
+  if len(object_names) == 1:
+    return get_skeleton_object_cfg(object_names[0])
+  if object_names == oc.ROBUST_DEXGRASP_TRAIN_OBJECTS:
+    return oc.get_robustdexgrasp_variant_cfg()
+  return oc.get_phase1_variant_cfg(object_names)
 
 
 def get_hand_object_contact_sensor() -> ContactSensorCfg:
@@ -142,7 +153,7 @@ def get_contact_clip_high() -> tuple[float, ...]:
   return tuple(high)
 
 
-def get_dexgrasp_rewards(object_name: str) -> dict[str, RewardTermCfg]:
+def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermCfg]:
   """§F reward stack (reference coeffs from cfg_reg.yaml)."""
   keypoints = SceneEntityCfg(
     "robot", body_names=rc.KEYPOINT_BODIES, preserve_order=True
@@ -173,7 +184,7 @@ def get_dexgrasp_rewards(object_name: str) -> dict[str, RewardTermCfg]:
       params={
         "asset_cfg": keypoints,
         "object_entity": "object",
-        "object_name": object_name,
+        "object_names": object_names,
         **af_params,
       },
     ),
@@ -277,19 +288,28 @@ def get_dexgrasp_rewards(object_name: str) -> dict[str, RewardTermCfg]:
 
 def dexgrasp_ur5e_rh5dg2_env_cfg(
   play: bool = False,
-  object_name: str = SKELETON_OBJECT,
+  object_name: str | None = None,
 ) -> ManagerBasedRlEnvCfg:
   cfg = make_dexgrasp_env_cfg()
 
   cfg.scene.entities["robot"] = get_dexgrasp_robot_cfg()
-  cfg.scene.entities["object"] = get_skeleton_object_cfg(object_name)
+  if play:
+    object_names = (object_name or SKELETON_OBJECT,)
+    cfg.scene.entities["object"] = get_skeleton_object_cfg(object_names[0], fixed=True)
+  else:
+    object_names = (
+      (object_name,) if object_name is not None else oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
+    )
+    cfg.scene.entities["object"] = get_dexgrasp_object_cfg(object_names)
+  if object_name is None and not play:
+    cfg.scene.num_envs = oc.ROBUST_DEXGRASP_BASELINE_NUM_ENVS
   cfg.scene.sensors = cfg.scene.sensors + (
     get_hand_object_contact_sensor(),
     get_hand_table_contact_sensor(),
     get_arm_world_contact_sensor(),
     get_arm_table_contact_sensor(),
   )
-  cfg.rewards = get_dexgrasp_rewards(object_name)
+  cfg.rewards = get_dexgrasp_rewards(object_names)
 
   # Per-robot observation scopes. preserve_order locks the documented frame
   # order (KEYPOINT_BODIES / CONTACT_BODIES / ALL_JOINT_NAMES) against model
@@ -316,7 +336,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   actor_terms["hand_center"].params["asset_cfg"] = hand_center
   actor_terms["wrist_orientation"].params["asset_cfg"] = wrist
   actor_terms["af_vec"].params["asset_cfg"] = keypoints
-  actor_terms["af_vec"].params["object_name"] = object_name
+  actor_terms["af_vec"].params["object_names"] = object_names
 
   action = cfg.actions["joint_pos"]
   assert isinstance(action, RelativeJointPositionActionCfg)
@@ -330,15 +350,17 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     func=mdp.ResetGraspPose,
     mode="reset",
     params={
-      "object_name": object_name,
+      "object_names": object_names,
       "table_top_z": TABLE_TOP_Z,
       "mount_z": ARM_MOUNT_Z,
+      "object_clearance": 0.0 if play else 0.002,
     },
   )
 
   cfg.viewer.body_name = "base"
 
   if play:
+    cfg.terminations = {}
     cfg.episode_length_s = int(1e9)
     cfg.observations["actor"].enable_corruption = False
 

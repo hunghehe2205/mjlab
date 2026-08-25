@@ -71,7 +71,7 @@ def test_reward_coeffs_complete() -> None:
 
 @pytest.mark.slow
 def test_object_displacement_uses_reset_pose() -> None:
-  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name="potted_meat_can")
   with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
@@ -91,7 +91,7 @@ def test_object_displacement_uses_reset_pose() -> None:
 
 @pytest.mark.slow
 def test_rewards_finite_and_quiet_at_reset() -> None:
-  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name="potted_meat_can")
   cfg.scene.num_envs = 2
   cfg.seed = 0
   with warnings.catch_warnings():

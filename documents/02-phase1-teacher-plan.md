@@ -1,7 +1,7 @@
 # Phase 1 — Teacher policy (privileged PPO)
 
-Mục tiêu: teacher grasp được 3–5 object trên UR5e + RH5-DG2 trong mjlab,
-eval lift success > ~80% trước khi sang Phase 2.
+Mục tiêu: teacher grasp được cohort 35 object RobustDexGrasp trên UR5e +
+RH5-DG2 trong mjlab, eval lift success > ~80% trước khi sang Phase 2.
 
 Cấu trúc code đích:
 
@@ -26,8 +26,9 @@ assets: src/mjlab/asset_zoo/objects/dexgrasp/...
   số trong constants, verify self-collision-free. (Chưa nhét vào keyframe: reset
   event ở §C sẽ set; home keyframe giữ ngón mở = 0.)
 - [x] Thêm `ACTION_SCALE_ARM=0.005`, `ACTION_SCALE_FINGER=0.015` + nhóm tên khớp.
-- [x] Chọn 5 object gần-lồi: box + cylinder (procedural) + potted_meat_can,
-  tomato_soup_can, sugar_box (mesh YCB). Banana bỏ (lõm nhẹ → hull sai).
+- [x] Nhập cohort 35 object `new_training_set` của RobustDexGrasp. Dùng mesh
+  collision `top_watertight_tiny.obj`, tạo 200 affordance points + lowest-point
+  metadata; giữ box/cylinder là object debug ngoài cohort.
 - [x] Script `precompute.py`: 200 surface points + normals + centroid + lowest
   → `.npz` cạnh mesh.
 - [x] Mesh → MJCF `spec_fn`: collision = **convex hull** (không coacd, xem
@@ -37,12 +38,13 @@ assets: src/mjlab/asset_zoo/objects/dexgrasp/...
 
 ## B. Scene & task skeleton
 
-- [~] `SceneCfg`: bàn box tĩnh (top 0.771 m, friction 0.2) + **bục riêng** cho
+- [x] `SceneCfg`: bàn box tĩnh (top 0.771 m, friction 0.2) + **bục riêng** cho
   UR5e (base flush mặt bàn z=0.771, khe ~8cm) + object. Fixed-base entity
   auto-mocap → reset về env_origins. Arm menagerie actuator adopt qua
-  `XmlActuatorCfg` (action điều khiển đủ 24 khớp). Cả 5 object đã mesh-hóa →
-  `get_phase1_variant_cfg()` (VariantEntityCfg) dựng được. **Còn lại:** wire
-  variant vào scene (đặt object theo lowest_point từng world) → làm ở §C.
+  `XmlActuatorCfg` (action điều khiển đủ 24 khớp). Cả 35 object đã mesh-hóa →
+  `VariantEntityCfg` gán một mesh theo mỗi world. Cohort mặc định dùng weight
+  gốc (44 slots: scissors/off_water_body ×3, 7 object khó ×2, còn lại ×1),
+  với 2 lần lặp thành 88 environment train mặc định.
 - [x] `ContactSensor` hand↔object: 16 body (palm + 3 link cuối mỗi ngón; pad là
   fixed-child của dip/palm nên subtree-sensor gộp luôn), `reduce="netforce"` +
   `history_length=DECIMATION` → impulse = Σ substeps force × dt. (→ §E; sensor
@@ -74,8 +76,9 @@ assets: src/mjlab/asset_zoo/objects/dexgrasp/...
 - [x] Reset event (`mdp/events.py::ResetGraspPose`) + wire vào robot cfg: ghi
   object root (sampled pose + env_origin) + arm qpos, fingers giữ default
   (`INIT_FINGER_POSE`). Test: grasp-center in-sim khớp IK prediction, object trên
-  bàn, no NaN. **Chưa:** self-collision probe resample (hoãn — problems/
-  pregrasp-ur5e-tuning); IK-fail đã có `fallback_arm_qpos`.
+  bàn, no NaN; đọc mesh/point cloud/lowest-point theo variant từng world.
+  Probe tĩnh arm↔hand reject candidate va chạm và resample tối đa 8 lần;
+  fallback chỉ dùng khi collision-free, nếu không về HOME pose an toàn.
 - [x] `sim.forward()` sau ghi pose: env tự forward sau reset events (`_reset_idx`
   → `write_data_to_sim` → `sim.forward()`), reset event không cần tự gọi.
 
@@ -128,7 +131,7 @@ problems/phase1-rewards-notes.md).
 - [x] `time_out` 70 bước; terminate khi keypoint tay dưới mặt bàn; NaN guard.
 - [x] Metric success: script eval riêng — sau 70 bước grasp, arm target nội suy
   về pose nâng trong 80–100 bước (5 Hz), success = object z tăng > 0.1 m;
-  log per-object success rate.
+  log per-object success rate cho toàn bộ cohort 35 object.
 
 ## H. RL config & train
 

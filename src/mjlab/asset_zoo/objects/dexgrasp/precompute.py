@@ -63,7 +63,9 @@ def precompute_object(name: str) -> None:
   # Sample the convex hull: MuJoCo collides against the hull, so the affordance
   # cloud must lie on the surface the fingers actually contact.
   data = sample_object(get_object_trimesh(name).convex_hull)
-  np.savez(obj.npz_path, lowest_point=np.float32(obj.lowest_point), **data)
+  lowest = obj.lowest_point
+  (ASSETS_DIR / name / "lowest_point.txt").write_text(f"{lowest:.6f}\n")
+  np.savez(obj.npz_path, lowest_point=np.float32(lowest), **data)
 
 
 def main() -> None:

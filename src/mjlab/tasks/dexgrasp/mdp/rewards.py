@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
 import torch
 
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
@@ -109,9 +110,14 @@ class AffordanceDistance:
   """-sum(weights * min_dist) over the hand keypoints."""
 
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
-    obj = oc.PHASE1_OBJECTS[cfg.params["object_name"]]
+    names = tuple(
+      cfg.params.get("object_names")
+      or (cfg.params.get("object_name", "potted_meat_can"),)
+    )
     self._pcd = torch.as_tensor(
-      obj.load_surface_points(), dtype=torch.float32, device=env.device
+      np.stack([oc.PHASE1_OBJECTS[name].load_surface_points() for name in names]),
+      dtype=torch.float32,
+      device=env.device,
     )
     self._robot = env.scene[cfg.params["asset_cfg"].name]
     self._object = env.scene[cfg.params["object_entity"]]
@@ -122,13 +128,18 @@ class AffordanceDistance:
       cfg.params["wrist_index"],
       device=env.device,
     )
+    self._variant_ids = env.sim.world_to_variant.get(cfg.params["object_entity"])
+    if self._variant_ids is None:
+      self._variant_ids = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
     obj_pos = self._object.data.root_link_pos_w
     obj_quat = self._object.data.root_link_quat_w
     keypoints_w = self._robot.data.body_link_pos_w[:, self._keypoint_ids]
-    min_dist = keypoint_min_distances(keypoints_w, obj_pos, obj_quat, self._pcd)
+    min_dist = keypoint_min_distances(
+      keypoints_w, obj_pos, obj_quat, self._pcd[self._variant_ids]
+    )
     return -(min_dist * self._weights).sum(dim=-1)
 
 
@@ -232,12 +243,10 @@ class ObjectDisplacement:
     self._object = env.scene[cfg.params["object_entity"]]
     n = env.num_envs
     self._init_pos = torch.zeros((n, 3), device=env.device)
-    self._root_pos_q_adr = self._object.indexing.free_joint_q_adr[:3]
 
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
     ids = slice(None) if env_ids is None else env_ids
-    root_pos = self._object.data.data.qpos[:, self._root_pos_q_adr]
-    self._init_pos[ids] = root_pos[ids]
+    self._init_pos[ids] = self._object.data.root_link_pos_w[ids]
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs

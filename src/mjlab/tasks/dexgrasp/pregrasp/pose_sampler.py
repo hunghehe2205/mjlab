@@ -25,6 +25,7 @@ def sample_object_pose(
   lowest_point: float,
   non_uniform: bool = False,
   clearance: float = 0.002,
+  yaw: float | None = None,
 ) -> np.ndarray:
   """Polar tabletop pose as pos3 + wxyz quat (7,), resting on the table top.
 
@@ -53,11 +54,11 @@ def sample_object_pose(
   else:
     x, y = uniform_xy()
 
-  yaw = rng.uniform(-np.pi, np.pi)
+  sampled_yaw = rng.uniform(-np.pi, np.pi) if yaw is None else yaw
   pose = np.zeros(7)
   pose[0], pose[1], pose[2] = x, y, table_top_z - lowest_point + clearance
-  pose[3] = np.cos(yaw / 2.0)  # qw
-  pose[6] = np.sin(yaw / 2.0)  # qz (rotation about world z)
+  pose[3] = np.cos(sampled_yaw / 2.0)  # qw
+  pose[6] = np.sin(sampled_yaw / 2.0)  # qz (rotation about world z)
   return pose
 
 

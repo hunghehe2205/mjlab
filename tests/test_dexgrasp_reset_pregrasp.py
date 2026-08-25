@@ -24,7 +24,7 @@ from mjlab.utils.random import seed_rng
 
 @pytest.mark.slow
 def test_reset_places_arm_at_pregrasp():
-  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
   cfg.scene.num_envs = 4
   cfg.seed = 0
   with warnings.catch_warnings():
@@ -66,7 +66,7 @@ def test_reset_places_arm_at_pregrasp():
 
 def _reset_object_xy() -> torch.Tensor:
   seed_rng(123)  # seed mjlab's global RNG before building
-  cfg = dexgrasp_ur5e_rh5dg2_env_cfg()
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
   cfg.scene.num_envs = 2
   cfg.seed = None  # env skips its own seeding; sampling must follow the global RNG
   with warnings.catch_warnings():
