@@ -11,6 +11,18 @@ sinh NaN dump mới.
 Instability high-spin của MJWarp vẫn còn; termination ngăn đường dẫn đã quan sát
 trong train chứ không sửa backend physics.
 
+### Kaggle run dùng commit cũ
+
+W&B run `y1po6xgr` ngày 2026-08-25 chạy commit `f910acabc`, trước containment
+fix `d447854a6`. Run thực tế dùng 2048 env trên một Tesla T4 dù tên/tag ghi
+4096 env; GPU thứ hai idle. Từ iteration 0–4 đã có
+`Episode_Termination/nan > 0`, object velocity reward bùng tới `10^24–10^30`
+và angular-velocity reward tới `10^29–10^33`. Run không có metric
+`object_out_of_workspace`, xác nhận code sửa chưa có trên Kaggle.
+
+Run này không dùng để đánh giá fix. Cần push commit mới rồi chạy lại; notebook
+được đặt 2048 env/GPU trên 2×T4, tổng 4096 env.
+
 ## Cách tái lập (lỗi gốc)
 
 Chạy CPU với cohort mặc định, 8 worlds, seed mặc định `42`, policy chưa train:
@@ -111,8 +123,8 @@ sai mesh và inertia.
   không đọc derived pose cũ trước `sim.forward()`; displacement reward nay lấy
   đúng pose đầu episode làm baseline.
 - W&B ghi thêm peak object linear/angular speed theo episode. Notebook Kaggle
-  lưu NaNGuard dump, resolved config, git state và metadata lệnh chạy vào
-  diagnostics artifact của cùng run.
+  dùng logger mặc định để upload metrics, resolved config, git state và model;
+  NaNGuard dump được giữ local trong `/kaggle/working/nan_dumps`.
 
 ## Verify
 

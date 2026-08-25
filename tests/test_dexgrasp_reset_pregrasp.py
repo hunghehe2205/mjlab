@@ -19,6 +19,9 @@ from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
 from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import TABLE_TOP_Z
 from mjlab.tasks.dexgrasp.pregrasp.generator import CAMERA_POSITION
 from mjlab.tasks.dexgrasp.pregrasp.kinematics import ArmKinematics
+from mjlab.tasks.dexgrasp.pregrasp.self_collision import (
+  MIN_FOREARM_HEIGHT_ABOVE_BASE,
+)
 from mjlab.utils.random import seed_rng
 
 
@@ -35,8 +38,10 @@ def test_reset_places_arm_at_pregrasp():
       robot = env.scene["robot"]
       obj = env.scene["object"]
       gc_idx = robot.site_names.index("grasp_center")
+      forearm_idx = robot.body_names.index("forearm_link")
       arm_ids = [robot.joint_names.index(n) for n in rc.ARM_JOINT_NAMES]
       gc_w = robot.data.site_pos_w[:, gc_idx].clone()
+      forearm_z_w = robot.data.body_link_pos_w[:, forearm_idx, 2].clone()
       obj_w = obj.data.root_link_pos_w.clone()
       arm_q = robot.data.joint_pos[:, arm_ids].cpu().numpy()
       origins = env.scene.env_origins.clone()
@@ -44,6 +49,8 @@ def test_reset_places_arm_at_pregrasp():
       env.close()
 
   assert no_nan
+  min_forearm_z = origins[:, 2] + ARM_MOUNT_Z + MIN_FOREARM_HEIGHT_ABOVE_BASE
+  assert torch.all(forearm_z_w >= min_forearm_z)
   # Object rests on the table with the 2 mm spawn clearance (z fixed by sampler).
   low = oc.PHASE1_OBJECTS[SKELETON_OBJECT].lowest_point
   assert torch.allclose(

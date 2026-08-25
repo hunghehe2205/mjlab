@@ -64,6 +64,10 @@ bỏ `.clone()` thừa; bump IK round-trip test 40→100 pose.
 
 ## 3. Đã xử lý (không phải vấn đề mở)
 
+- **Folded elbow-down IK branch:** static probe yêu cầu `forearm_link` cao ít
+  nhất 0.40 m so với arm base. Constraint này loại pose arm gập chữ U sát bàn
+  nhưng giữ HOME/fallback và cụm side-grasp tự nhiên có elbow cao ~0.588 m.
+
 - **DH residual 0.5mm**: IK dùng DH fit theo MJCF (không textbook), `_ARG_TOL=1e-2`
   để không loại nhầm pose reachable. Sai số FK round-trip ≤0.5mm — thừa cho pre-grasp
   0.25m (policy tinh chỉnh 70 bước). Xem `pregrasp/ik_ur5e.py`.

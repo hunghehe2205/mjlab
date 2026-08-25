@@ -7,6 +7,8 @@ import numpy as np
 
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
 
+MIN_FOREARM_HEIGHT_ABOVE_BASE = 0.40
+
 
 class ArmHandSelfCollisionProbe:
   """Check arm-to-hand contacts without stepping the simulation."""
@@ -41,12 +43,28 @@ class ArmHandSelfCollisionProbe:
       for body_id in range(self._model.nbody)
       if self._is_hand_descendant(body_id, hand_root)
     }
+    self._forearm_body_id = mujoco.mj_name2id(
+      self._model, mujoco.mjtObj.mjOBJ_BODY, "forearm_link"
+    )
+
+  def is_valid_pregrasp(self, arm_qpos: np.ndarray) -> bool:
+    """Reject collisions and folded elbow-down IK branches."""
+    self._forward(arm_qpos)
+    if self._data.xpos[self._forearm_body_id, 2] < MIN_FOREARM_HEIGHT_ABOVE_BASE:
+      return False
+    return not self._has_arm_hand_contact()
 
   def collides(self, arm_qpos: np.ndarray) -> bool:
     """Return whether ``arm_qpos`` produces an arm-to-hand contact."""
+    self._forward(arm_qpos)
+    return self._has_arm_hand_contact()
+
+  def _forward(self, arm_qpos: np.ndarray) -> None:
     self._qpos[self._arm_qpos_adr] = arm_qpos
     self._data.qpos[:] = self._qpos
     mujoco.mj_forward(self._model, self._data)
+
+  def _has_arm_hand_contact(self) -> bool:
     for contact_index in range(self._data.ncon):
       contact = self._data.contact[contact_index]
       first = int(self._model.geom_bodyid[contact.geom1])

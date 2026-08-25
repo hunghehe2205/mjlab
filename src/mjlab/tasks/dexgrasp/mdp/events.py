@@ -40,8 +40,8 @@ class ResetGraspPose:
     self._seed = np.array([home[n] for n in rc.ARM_JOINT_NAMES])
     self._max_attempts = int(p.get("max_attempts", MAX_PREGRASP_ATTEMPTS))
     self._probe = ArmHandSelfCollisionProbe()
-    if self._probe.collides(self._seed):
-      raise ValueError("UR5e RH5-DG2 home arm pose collides with the hand.")
+    if not self._probe.is_valid_pregrasp(self._seed):
+      raise ValueError("UR5e RH5-DG2 home arm pose is not a valid pre-grasp.")
     # Seed from mjlab's global numpy RNG (seed_rng'd from the resolved env seed)
     # rather than raw cfg.seed, which is None -> OS entropy when unset.
     self._rng = np.random.default_rng(int(np.random.randint(0, 2**31 - 1)))
@@ -107,11 +107,11 @@ class ResetGraspPose:
         self._kin,
         self._seed,
       )
-      if arm is not None and not self._probe.collides(arm):
+      if arm is not None and self._probe.is_valid_pregrasp(arm):
         return pose, arm
       pose = self._sample_object_pose(variant)
     fallback = fallback_arm_qpos(pose[:3])
-    return pose, fallback if not self._probe.collides(fallback) else self._seed
+    return pose, fallback if self._probe.is_valid_pregrasp(fallback) else self._seed
 
   def _sample_object_pose(self, variant: int) -> np.ndarray:
     return sample_object_pose(
