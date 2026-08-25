@@ -327,6 +327,14 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     get_arm_table_contact_sensor(),
   )
   cfg.rewards = get_dexgrasp_rewards(object_names)
+  # Per-robot observation scopes. preserve_order locks the documented frame
+  # order (KEYPOINT_BODIES / CONTACT_BODIES / ALL_JOINT_NAMES) against model
+  # layout changes, so §F finger weights stay aligned with the obs columns.
+  actor_terms = cfg.observations["actor"].terms
+  joints = SceneEntityCfg("robot", joint_names=rc.ALL_JOINT_NAMES, preserve_order=True)
+  keypoints = SceneEntityCfg(
+    "robot", body_names=rc.KEYPOINT_BODIES, preserve_order=True
+  )
   if not play:
     cfg.metrics.update(
       {
@@ -340,17 +348,27 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
           params={"object_entity": "object"},
           reduce="max",
         ),
+        "hand_keypoint_below_table_depth_max": MetricsTermCfg(
+          func=mdp.hand_keypoint_below_table_depth,
+          params={"table_top_z": TABLE_TOP_Z, "asset_cfg": keypoints},
+          reduce="max",
+        ),
+        "arm_action_magnitude_mean": MetricsTermCfg(
+          func=mdp.mean_arm_action_magnitude,
+          params={"arm_action_dim": len(rc.ARM_JOINT_NAMES)},
+        ),
+        "object_lift_height_max": MetricsTermCfg(
+          func=mdp.ObjectLiftHeight,
+          params={"object_entity": "object"},
+          reduce="max",
+        ),
+        "lift_success": MetricsTermCfg(
+          func=mdp.LiftSuccess,
+          params={"object_entity": "object", "success_height": 0.10},
+          reduce="max",
+        ),
       }
     )
-
-  # Per-robot observation scopes. preserve_order locks the documented frame
-  # order (KEYPOINT_BODIES / CONTACT_BODIES / ALL_JOINT_NAMES) against model
-  # layout changes, so §F finger weights stay aligned with the obs columns.
-  actor_terms = cfg.observations["actor"].terms
-  joints = SceneEntityCfg("robot", joint_names=rc.ALL_JOINT_NAMES, preserve_order=True)
-  keypoints = SceneEntityCfg(
-    "robot", body_names=rc.KEYPOINT_BODIES, preserve_order=True
-  )
   cfg.terminations["hand_below_table"] = TerminationTermCfg(
     func=mdp.hand_below_table,
     params={"table_top_z": TABLE_TOP_Z, "asset_cfg": keypoints},

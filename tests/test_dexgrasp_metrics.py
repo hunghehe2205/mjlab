@@ -4,7 +4,12 @@ from typing import cast
 import torch
 
 from mjlab.envs import ManagerBasedRlEnv
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.dexgrasp.mdp.metrics import (
+  LiftSuccess,
+  ObjectLiftHeight,
+  hand_keypoint_below_table_depth,
+  mean_arm_action_magnitude,
   object_angular_speed,
   object_linear_speed,
 )
@@ -29,3 +34,52 @@ def test_object_speed_metrics_report_physical_units() -> None:
 
   assert torch.equal(object_linear_speed(env), torch.tensor([5.0, 2.0]))
   assert torch.equal(object_angular_speed(env), torch.tensor([12.0, 3.0]))
+
+
+def test_hand_keypoint_depth_and_arm_action_metrics() -> None:
+  class Scene(dict):
+    env_origins: torch.Tensor
+
+  robot = SimpleNamespace(
+    data=SimpleNamespace(
+      body_link_pos_w=torch.tensor(
+        [[[0.0, 0.0, 0.8], [0.0, 0.0, 0.7]], [[0.0, 0.0, 0.9], [0.0, 0.0, 0.85]]]
+      )
+    )
+  )
+  scene = Scene(robot=robot)
+  scene.env_origins = torch.zeros(2, 3)
+  env = cast(
+    ManagerBasedRlEnv,
+    SimpleNamespace(
+      scene=scene,
+      action_manager=SimpleNamespace(
+        action=torch.tensor([[1.0, -0.5, 0.0], [0.2, 0.4, 0.6]])
+      ),
+    ),
+  )
+  asset_cfg = cast(SceneEntityCfg, SimpleNamespace(name="robot", body_ids=[0, 1]))
+
+  torch.testing.assert_close(
+    hand_keypoint_below_table_depth(env, 0.75, asset_cfg), torch.tensor([0.05, 0.0])
+  )
+  assert torch.equal(mean_arm_action_magnitude(env, 2), torch.tensor([0.75, 0.3]))
+
+
+def test_lift_metrics_track_displacement_from_reset() -> None:
+  obj = SimpleNamespace(
+    data=SimpleNamespace(root_link_pos_w=torch.tensor([[0.0, 0.0, 0.8]]))
+  )
+  env = cast(
+    ManagerBasedRlEnv,
+    SimpleNamespace(scene={"object": obj}, num_envs=1, device="cpu"),
+  )
+  cfg = SimpleNamespace(params={"object_entity": "object", "success_height": 0.10})
+  lift_height = ObjectLiftHeight(cfg, env)
+  lift_success = LiftSuccess(cfg, env)
+  lift_height.reset()
+  lift_success.reset()
+  obj.data.root_link_pos_w[:, 2] = 0.91
+
+  torch.testing.assert_close(lift_height(env), torch.tensor([0.11]))
+  assert torch.equal(lift_success(env), torch.tensor([1.0]))
