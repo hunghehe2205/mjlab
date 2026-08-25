@@ -244,9 +244,18 @@ class ObjectDisplacement:
     n = env.num_envs
     self._init_pos = torch.zeros((n, 3), device=env.device)
 
+  def _root_pos_w(self) -> torch.Tensor:
+    if not self._object.is_fixed_base:
+      q_adr = self._object.indexing.free_joint_q_adr[:3]
+      return self._object.data.data.qpos[:, q_adr]
+    mocap_id = self._object.indexing.mocap_id
+    if mocap_id is not None:
+      return self._object.data.data.mocap_pos[:, mocap_id]
+    return self._object.data.root_link_pos_w
+
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
     ids = slice(None) if env_ids is None else env_ids
-    self._init_pos[ids] = self._object.data.root_link_pos_w[ids]
+    self._init_pos[ids] = self._root_pos_w()[ids]
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs

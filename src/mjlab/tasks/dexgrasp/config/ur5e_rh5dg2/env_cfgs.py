@@ -10,6 +10,7 @@ from mjlab.entity import EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp.actions import RelativeJointPositionActionCfg
 from mjlab.managers.event_manager import EventTermCfg
+from mjlab.managers.metrics_manager import MetricsTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
@@ -18,6 +19,8 @@ from mjlab.tasks.dexgrasp import mdp
 from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import (
   ARM_MOUNT_Z,
   DECIMATION,
+  TABLE_CENTER,
+  TABLE_HALF,
   TABLE_TOP_Z,
   make_dexgrasp_env_cfg,
 )
@@ -37,6 +40,20 @@ ACTION_SCALE = {
 
 SKELETON_OBJECT = "potted_meat_can"
 OBJECT_XY = (0.0, -0.6)  # Polar r~0.6, theta=-0.5pi (in the sampling region).
+
+# Reset unrecoverable objects before off-table motion reaches unstable high spin.
+_OBJECT_XY_MARGIN = 0.10
+OBJECT_WORKSPACE_BOUNDS = (
+  (
+    TABLE_CENTER[0] - TABLE_HALF[0] - _OBJECT_XY_MARGIN,
+    TABLE_CENTER[0] + TABLE_HALF[0] + _OBJECT_XY_MARGIN,
+  ),
+  (
+    TABLE_CENTER[1] - TABLE_HALF[1] - _OBJECT_XY_MARGIN,
+    TABLE_CENTER[1] + TABLE_HALF[1] + _OBJECT_XY_MARGIN,
+  ),
+  (TABLE_TOP_Z - 0.05, TABLE_TOP_Z + 0.50),
+)
 
 
 def get_dexgrasp_robot_cfg() -> EntityCfg:
@@ -310,6 +327,21 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     get_arm_table_contact_sensor(),
   )
   cfg.rewards = get_dexgrasp_rewards(object_names)
+  if not play:
+    cfg.metrics.update(
+      {
+        "object_linear_speed_max": MetricsTermCfg(
+          func=mdp.object_linear_speed,
+          params={"object_entity": "object"},
+          reduce="max",
+        ),
+        "object_angular_speed_max": MetricsTermCfg(
+          func=mdp.object_angular_speed,
+          params={"object_entity": "object"},
+          reduce="max",
+        ),
+      }
+    )
 
   # Per-robot observation scopes. preserve_order locks the documented frame
   # order (KEYPOINT_BODIES / CONTACT_BODIES / ALL_JOINT_NAMES) against model
@@ -322,6 +354,10 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   cfg.terminations["hand_below_table"] = TerminationTermCfg(
     func=mdp.hand_below_table,
     params={"table_top_z": TABLE_TOP_Z, "asset_cfg": keypoints},
+  )
+  cfg.terminations["object_out_of_workspace"] = TerminationTermCfg(
+    func=mdp.object_out_of_workspace,
+    params={"bounds": OBJECT_WORKSPACE_BOUNDS, "object_entity": "object"},
   )
   cfg.terminations["nan"] = TerminationTermCfg(func=mdp.nan_detection)
   arm_links = SceneEntityCfg(
