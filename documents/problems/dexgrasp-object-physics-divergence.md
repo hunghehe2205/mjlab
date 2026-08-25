@@ -2,14 +2,21 @@
 
 ## Trạng thái
 
-**Đã containment case tái lập (2026-08-25).** Termination
-`object_out_of_workspace` kết thúc episode khi object rời task workspace, trước
-khi quỹ đạo off-table đạt vận tốc quay không ổn định. Smoke train cùng cấu hình
-tái lập chạy đủ 20/20 iteration, `Episode_Termination/nan = 0` toàn bộ và không
-sinh NaN dump mới.
+**Đã khắc phục NaN ở DexGrasp task (2026-08-25).** Mỗi object free joint dùng
+damping `1e-5`. Mức damping nhỏ này ngăn MJWarp tự tăng năng lượng quay ở
+timestep 10 ms nhưng không ảnh hưởng đáng kể tới chuyển động grasp thông thường.
 
-Instability high-spin của MJWarp vẫn còn; termination ngăn đường dẫn đã quan sát
-trong train chứ không sửa backend physics.
+Termination `object_out_of_workspace` vẫn được giữ làm containment khi policy
+hất object khỏi task workspace, nhưng không còn là lớp bảo vệ duy nhất.
+
+### Kaggle run sau containment nhưng trước damping fix
+
+W&B run `krjzt5at` chạy commit `1bf963bba` cho thấy containment ở policy
+boundary chưa đủ. Trong iteration 0–104, 77/105 iteration có
+`Episode_Termination/nan > 0`; 71/105 peak-speed metric là NaN; object
+angular-velocity reward tăng tới `3.6e32`. Nguyên nhân là termination chỉ chạy
+sau 20 physics substep (0.2 s), đủ lâu để high-spin diverge bên trong một
+control step.
 
 ### Kaggle run dùng commit cũ
 
@@ -110,6 +117,11 @@ sai mesh và inertia.
 
 ## Sửa
 
+- Object free joint có damping `1e-5`. Free-spin regression ở 100 rad/s,
+  timestep 10 ms cho kết quả 35/35 object finite trong 0.5 s; không damping có
+  `hammer`/`scissors` thành NaN và object khác tăng tới khoảng `10^19` rad/s.
+  Stress test riêng trên các object nhạy với nhiều trục quay, 100–200 rad/s
+  trong 1 s cho 50/50 case finite.
 - Termination mới `object_out_of_workspace`
   (`src/mjlab/tasks/dexgrasp/mdp/terminations.py`): terminate khi object root
   ra khỏi khối box quanh bàn (frame env-local).
@@ -128,6 +140,9 @@ sai mesh và inertia.
 
 ## Verify
 
+- Smoke train sau damping fix chạy đủ 20/20 iteration với đúng cấu hình tái lập
+  8 world, seed 42: `Episode_Termination/nan = 0` toàn bộ, peak angular speed
+  finite (cao nhất khoảng 12.4 rad/s), và không sinh NaN dump.
 - Smoke train sau cả termination và reward reset fix: đủ 20/20 iteration,
   `Episode_Termination/nan = 0` mọi iteration, không dump mới.
   `Episode_Termination/object_out_of_workspace` xuất hiện thường xuyên như kỳ

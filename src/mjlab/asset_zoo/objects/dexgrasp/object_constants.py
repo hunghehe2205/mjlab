@@ -25,6 +25,10 @@ ASSETS_DIR = OBJECTS_DIR / "assets"
 
 # Object mass used by the original RobustDexGrasp URDFs (uniform across objects).
 OBJECT_MASS = 0.24875
+# A tiny free-joint damping prevents MJWarp's explicit free-body angular dynamics
+# from gaining energy at high spin (notably for hammer/scissors at a 10 ms step).
+# At normal grasp speeds its time constant is long enough to be negligible.
+OBJECT_FREE_JOINT_DAMPING = 1e-5
 OBJECT_RGBA = (0.85, 0.55, 0.25, 1.0)
 NUM_SURFACE_POINTS = 200
 
@@ -132,7 +136,8 @@ def get_mesh_object_spec(name: str, fixed: bool = False) -> mujoco.MjSpec:
   spec.add_mesh(name="object_mesh", file="collision.obj")
   body = spec.worldbody.add_body(name="object")
   if not fixed:
-    body.add_freejoint(name="object_joint")
+    joint = body.add_freejoint(name="object_joint")
+    joint.damping = np.full(3, OBJECT_FREE_JOINT_DAMPING)
   geom = body.add_geom()
   geom.name = "object_collision"
   geom.type = mujoco.mjtGeom.mjGEOM_MESH

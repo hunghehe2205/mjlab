@@ -5,11 +5,13 @@ from typing import cast
 import mujoco
 import numpy as np
 import pytest
+import torch
 import trimesh
 
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.objects.dexgrasp.precompute import get_object_trimesh
 from mjlab.entity import Entity
+from mjlab.sim import MujocoCfg, Simulation, SimulationCfg
 
 OBJECT_NAMES = tuple(oc.PHASE1_OBJECTS)
 
@@ -33,6 +35,33 @@ def test_object_spec_compiles(name: str) -> None:
   assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "object_collision") >= 0
   bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
   assert model.body_mass[bid] == pytest.approx(oc.OBJECT_MASS)
+  np.testing.assert_allclose(model.dof_damping, oc.OBJECT_FREE_JOINT_DAMPING)
+
+
+def test_hammer_free_spin_remains_finite_in_mjwarp() -> None:
+  """Regress the high-spin path that produced NaNs during teacher training."""
+  cfg = SimulationCfg(
+    mujoco=MujocoCfg(
+      timestep=0.01,
+      gravity=(0.0, 0.0, 0.0),
+      disableflags=("contact",),
+    )
+  )
+  sim = Simulation(
+    num_envs=1,
+    cfg=cfg,
+    spec=oc.get_mesh_object_spec("hammer"),
+    device="cpu",
+  )
+  direction = torch.ones(3) / np.sqrt(3.0)
+  sim.data.qvel[0, 3:6] = direction * 100.0
+
+  for _ in range(50):
+    sim.step()
+
+  assert torch.isfinite(sim.data.qpos).all()
+  assert torch.isfinite(sim.data.qvel).all()
+  assert torch.linalg.vector_norm(sim.data.qvel[0, 3:6]) < 100.0
 
 
 @pytest.mark.parametrize("name", OBJECT_NAMES)
