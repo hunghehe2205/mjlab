@@ -4,22 +4,43 @@ import io
 import math
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
+from types import SimpleNamespace
+from typing import cast
+from unittest.mock import MagicMock
 
 import pytest
 import torch
 
 import mjlab.tasks  # noqa: F401  (triggers task registration)
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
   dexgrasp_ur5e_rh5dg2_env_cfg,
 )
 from mjlab.tasks.dexgrasp.mdp.observations import (
   compute_af_vec,
+  hand_center_pos,
   nearest_affordance_points,
 )
 from mjlab.utils.lab_api.math import matrix_from_quat
 
 OBS_DIM = 24 + 24 + 32 + 24 + 6 + 3 + 6 + 72
+
+
+def test_hand_center_position_is_environment_local() -> None:
+  positions = torch.tensor([[[0.1, -0.2, 0.9]], [[2.6, 2.3, 0.9]]])
+  robot = SimpleNamespace(data=SimpleNamespace(site_pos_w=positions))
+  scene = MagicMock()
+  scene.__getitem__.return_value = robot
+  scene.env_origins = torch.tensor([[0.0, 0.0, 0.0], [2.5, 2.5, 0.0]])
+  env = SimpleNamespace(scene=scene)
+  asset_cfg = SceneEntityCfg("robot")
+  asset_cfg.site_ids = [0]
+
+  local = hand_center_pos(cast(ManagerBasedRlEnv, env), asset_cfg=asset_cfg)
+
+  expected = torch.tensor([[0.1, -0.2, 0.9], [0.1, -0.2, 0.9]])
+  assert torch.allclose(local, expected)
 
 
 def test_nearest_affordance_points() -> None:

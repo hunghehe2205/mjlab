@@ -4,26 +4,72 @@ import io
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
 
+import mujoco
 import pytest
 import torch
 
 import mjlab.tasks  # noqa: F401  (triggers task registration)
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
+from mjlab.entity.variants import VariantEntityCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
 from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
   ARM_MOUNT_Z,
+  HAND_TABLE_TERMINATION_TOLERANCE,
+  PHASE1_OBJECT_NAMES,
   SKELETON_OBJECT,
   dexgrasp_ur5e_rh5dg2_env_cfg,
 )
-from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import TABLE_TOP_Z
+from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import (
+  TABLE_FRICTION,
+  TABLE_TOP_Z,
+  get_arena_spec,
+)
 from mjlab.tasks.registry import list_tasks
 
 TASK_ID = "Mjlab-DexGrasp-UR5eRH5DG2"
+SINGLE_TASK_ID = f"{TASK_ID}-Single"
+PHASE1_TASK_ID = f"{TASK_ID}-Phase1"
 
 
 def test_task_registered() -> None:
-  assert TASK_ID in list_tasks()
+  registered = list_tasks()
+  assert TASK_ID in registered
+  assert SINGLE_TASK_ID in registered
+  assert PHASE1_TASK_ID in registered
+
+
+def test_phase1_object_names_are_coupled_across_config() -> None:
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_names=PHASE1_OBJECT_NAMES)
+  object_cfg = cfg.scene.entities["object"]
+
+  assert isinstance(object_cfg, VariantEntityCfg)
+  assert tuple(object_cfg.variants) == PHASE1_OBJECT_NAMES
+  assert cfg.events["reset_grasp_pose"].params["object_names"] == PHASE1_OBJECT_NAMES
+  assert (
+    cfg.observations["actor"].terms["af_vec"].params["object_names"]
+    == PHASE1_OBJECT_NAMES
+  )
+  assert (
+    cfg.rewards["affordance_distance"].params["object_names"] == PHASE1_OBJECT_NAMES
+  )
+
+
+def test_table_contact_matches_reference_friction() -> None:
+  model = get_arena_spec().compile()
+  table_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "table")
+
+  assert model.geom_friction[table_id, 0] == pytest.approx(TABLE_FRICTION)
+  assert TABLE_FRICTION == pytest.approx(0.2)
+  assert model.geom_priority[table_id] == 1
+
+
+def test_failure_semantics_are_explicit_in_training_config() -> None:
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
+  params = cfg.terminations["hand_below_table"].params
+
+  assert cfg.termination_reward == pytest.approx(-10.0)
+  assert params["tolerance"] == pytest.approx(HAND_TABLE_TERMINATION_TOLERANCE)
 
 
 @pytest.mark.slow

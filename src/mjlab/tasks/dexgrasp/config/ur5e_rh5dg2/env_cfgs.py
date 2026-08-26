@@ -40,6 +40,14 @@ ACTION_SCALE = {
 
 SKELETON_OBJECT = "potted_meat_can"
 OBJECT_XY = (0.0, -0.6)  # Polar r~0.6, theta=-0.5pi (in the sampling region).
+HAND_TABLE_TERMINATION_TOLERANCE = 0.005
+PHASE1_OBJECT_NAMES = (
+  "potted_meat_can",
+  "tomato_soup_can",
+  "tuna_fish_can",
+  "sugar_box",
+  "pudding_box",
+)
 
 # Reset unrecoverable objects before off-table motion reaches unstable high spin.
 _OBJECT_XY_MARGIN = 0.10
@@ -306,19 +314,28 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
 def dexgrasp_ur5e_rh5dg2_env_cfg(
   play: bool = False,
   object_name: str | None = None,
+  object_names: tuple[str, ...] | None = None,
 ) -> ManagerBasedRlEnvCfg:
+  if object_name is not None and object_names is not None:
+    raise ValueError("Specify either object_name or object_names, not both")
+  if object_names is not None and not object_names:
+    raise ValueError("object_names must contain at least one object")
+
   cfg = make_dexgrasp_env_cfg()
 
   cfg.scene.entities["robot"] = get_dexgrasp_robot_cfg()
+  selected_object_names = object_names or (
+    (object_name,) if object_name is not None else oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
+  )
   if play:
-    object_names = (object_name or SKELETON_OBJECT,)
-    cfg.scene.entities["object"] = get_skeleton_object_cfg(object_names[0], fixed=True)
-  else:
-    object_names = (
-      (object_name,) if object_name is not None else oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
+    if len(selected_object_names) > 1:
+      selected_object_names = (SKELETON_OBJECT,)
+    cfg.scene.entities["object"] = get_skeleton_object_cfg(
+      selected_object_names[0], fixed=True
     )
-    cfg.scene.entities["object"] = get_dexgrasp_object_cfg(object_names)
-  if object_name is None and not play:
+  else:
+    cfg.scene.entities["object"] = get_dexgrasp_object_cfg(selected_object_names)
+  if object_name is None and object_names is None and not play:
     cfg.scene.num_envs = oc.ROBUST_DEXGRASP_BASELINE_NUM_ENVS
   cfg.scene.sensors = cfg.scene.sensors + (
     get_hand_object_contact_sensor(),
@@ -326,7 +343,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     get_arm_world_contact_sensor(),
     get_arm_table_contact_sensor(),
   )
-  cfg.rewards = get_dexgrasp_rewards(object_names)
+  cfg.rewards = get_dexgrasp_rewards(selected_object_names)
   # Per-robot observation scopes. preserve_order locks the documented frame
   # order (KEYPOINT_BODIES / CONTACT_BODIES / ALL_JOINT_NAMES) against model
   # layout changes, so §F finger weights stay aligned with the obs columns.
@@ -371,7 +388,11 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     )
   cfg.terminations["hand_below_table"] = TerminationTermCfg(
     func=mdp.hand_below_table,
-    params={"table_top_z": TABLE_TOP_Z, "asset_cfg": keypoints},
+    params={
+      "table_top_z": TABLE_TOP_Z,
+      "asset_cfg": keypoints,
+      "tolerance": HAND_TABLE_TERMINATION_TOLERANCE,
+    },
   )
   cfg.terminations["object_out_of_workspace"] = TerminationTermCfg(
     func=mdp.object_out_of_workspace,
@@ -390,7 +411,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   actor_terms["hand_center"].params["asset_cfg"] = hand_center
   actor_terms["wrist_orientation"].params["asset_cfg"] = wrist
   actor_terms["af_vec"].params["asset_cfg"] = keypoints
-  actor_terms["af_vec"].params["object_names"] = object_names
+  actor_terms["af_vec"].params["object_names"] = selected_object_names
 
   action = cfg.actions["joint_pos"]
   assert isinstance(action, RelativeJointPositionActionCfg)
@@ -404,7 +425,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     func=mdp.ResetGraspPose,
     mode="reset",
     params={
-      "object_names": object_names,
+      "object_names": selected_object_names,
       "table_top_z": TABLE_TOP_Z,
       "mount_z": ARM_MOUNT_Z,
       "object_clearance": 0.0 if play else 0.002,

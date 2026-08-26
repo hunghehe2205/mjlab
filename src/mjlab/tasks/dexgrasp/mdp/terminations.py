@@ -17,11 +17,12 @@ def hand_below_table(
   env: ManagerBasedRlEnv,
   table_top_z: float,
   asset_cfg: SceneEntityCfg,
+  tolerance: float = 0.0,
 ) -> torch.Tensor:
-  """Terminate when any monitored hand keypoint goes below the tabletop."""
+  """Terminate when a monitored hand keypoint penetrates the table tolerance."""
   robot: Entity = env.scene[asset_cfg.name]
   keypoint_z = robot.data.body_link_pos_w[:, asset_cfg.body_ids, 2]
-  table_z = env.scene.env_origins[:, 2] + table_top_z
+  table_z = env.scene.env_origins[:, 2] + table_top_z - tolerance
   return (keypoint_z < table_z.unsqueeze(1)).any(dim=1)
 
 

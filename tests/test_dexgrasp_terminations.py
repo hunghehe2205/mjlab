@@ -47,6 +47,31 @@ def test_hand_below_table_uses_each_environment_origin() -> None:
   assert torch.equal(terminated, torch.tensor([False, True]))
 
 
+def test_hand_below_table_allows_small_contact_penetration() -> None:
+  positions = torch.tensor(
+    [
+      [[0.0, 0.0, 0.768]],
+      [[0.0, 0.0, 0.765]],
+    ]
+  )
+  robot = SimpleNamespace(data=SimpleNamespace(body_link_pos_w=positions))
+  scene = MagicMock()
+  scene.__getitem__.return_value = robot
+  scene.env_origins = torch.zeros(2, 3)
+  env = SimpleNamespace(scene=scene)
+  asset_cfg = SceneEntityCfg("robot")
+  asset_cfg.body_ids = [0]
+
+  terminated = hand_below_table(
+    cast(ManagerBasedRlEnv, env),
+    table_top_z=0.771,
+    asset_cfg=asset_cfg,
+    tolerance=0.005,
+  )
+
+  assert torch.equal(terminated, torch.tensor([False, True]))
+
+
 def test_object_out_of_workspace_flags_each_axis_violation() -> None:
   positions = torch.tensor(
     [

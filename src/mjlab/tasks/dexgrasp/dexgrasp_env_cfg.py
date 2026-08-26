@@ -32,8 +32,9 @@ from mjlab.viewer import ViewerConfig
 
 TABLE_TOP_Z = 0.771
 ARM_MOUNT_Z = TABLE_TOP_Z - 0.04
-# Standard tabletop friction.
-TABLE_FRICTION = 1.0
+# Match the low-friction tabletop used by RobustDexGrasp. Its priority makes this
+# value win over the per-object defaults when MuJoCo combines contact parameters.
+TABLE_FRICTION = 0.2
 
 # 1.2 m x 1.1 m table. Keep its near edge at y=-0.2 so it remains separated
 # from the pedestal while expanding the usable area away from the robot.
@@ -211,4 +212,7 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
     episode_length_s=EPISODE_LENGTH_S,
     scale_rewards_by_dt=False,  # Reference rewards are per control step.
     reward_clip_min=-2.0,  # Reference total-reward floor.
+    # RobustDexGrasp specifies terminalReward=-10. Apply it after clipping so a
+    # task failure cannot be converted back to the ordinary -2 per-step floor.
+    termination_reward=-10.0,
   )

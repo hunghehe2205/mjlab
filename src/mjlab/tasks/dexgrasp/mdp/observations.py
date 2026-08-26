@@ -89,9 +89,10 @@ def hand_center_pos(
   env: ManagerBasedRlEnv,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
 ) -> torch.Tensor:
-  """Grasp-center site position in the world frame."""
+  """Grasp-center site position in the environment-local frame."""
   robot: Entity = env.scene[asset_cfg.name]
-  return robot.data.site_pos_w[:, asset_cfg.site_ids].squeeze(1)
+  world_pos = robot.data.site_pos_w[:, asset_cfg.site_ids].squeeze(1)
+  return world_pos - env.scene.env_origins
 
 
 class HandObjectContacts:

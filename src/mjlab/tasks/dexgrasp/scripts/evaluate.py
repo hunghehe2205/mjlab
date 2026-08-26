@@ -32,6 +32,8 @@ class EvaluateConfig:
 
   checkpoint: Path
   """Local RSL-RL checkpoint to evaluate."""
+  objects: tuple[str, ...] = oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
+  """Objects to evaluate; defaults to the complete training cohort."""
   num_envs: int = 128
   """Number of episodes per object."""
   grasp_steps: int = 70
@@ -119,13 +121,17 @@ def run_object_evaluation(
 
 
 def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
-  """Load a checkpoint and report lift success for every Phase-1 object."""
+  """Load a checkpoint and report lift success for the requested objects."""
+  if not cfg.objects:
+    raise ValueError("At least one evaluation object is required")
+  unknown = set(cfg.objects) - set(oc.ROBUST_DEXGRASP_TRAIN_OBJECTS)
+  if unknown:
+    raise ValueError(f"Unknown evaluation objects: {sorted(unknown)}")
+
   configure_torch_backends()
   device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
   agent_cfg = dexgrasp_teacher_ppo_runner_cfg()
-  bootstrap_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(
-    object_name=oc.ROBUST_DEXGRASP_TRAIN_OBJECTS[0]
-  )
+  bootstrap_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=cfg.objects[0])
   bootstrap_cfg.scene.num_envs = 1
   bootstrap_cfg.terminations = {}
   bootstrap_cfg.auto_reset = False
@@ -137,8 +143,7 @@ def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
   vec_env.close()
 
   metrics = {
-    name: run_object_evaluation(name, cfg, policy, device)
-    for name in oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
+    name: run_object_evaluation(name, cfg, policy, device) for name in cfg.objects
   }
   for name, success_rate in metrics.items():
     print(f"{name}: {success_rate:.1%} lift success")

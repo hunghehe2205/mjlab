@@ -165,6 +165,13 @@ class ManagerBasedRlEnvCfg:
   reward_clip_min: float | None = None
   """Lower clamp on the total reward per step (applied after summation)."""
 
+  termination_reward: float | None = None
+  """Reward added for a non-timeout termination after per-step reward clipping.
+
+  This makes terminal failure costs independent of ``reward_clip_min``. Time-limit
+  truncations do not receive this reward because they are not task failures.
+  """
+
 
 class ManagerBasedRlEnv:
   """Manager-based RL environment."""
@@ -459,6 +466,8 @@ class ManagerBasedRlEnv:
     self.reward_buf = self.reward_manager.compute(dt=self.step_dt)
     if self.cfg.reward_clip_min is not None:
       self.reward_buf = self.reward_buf.clamp_min(self.cfg.reward_clip_min)
+    if self.cfg.termination_reward is not None:
+      self.reward_buf += self.reset_terminated * self.cfg.termination_reward
     self.metrics_manager.compute()
 
     # Events fire before auto-reset, on the terminal state, matching the

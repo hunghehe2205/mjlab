@@ -7,6 +7,7 @@ from test_command_manager import CounterCommand, CounterCommandCfg
 
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.managers.event_manager import EventTermCfg
+from mjlab.managers.termination_manager import TerminationTermCfg
 from mjlab.tasks.cartpole.cartpole_env_cfg import cartpole_balance_env_cfg
 
 
@@ -32,6 +33,27 @@ def _step_until_done_env(env):
     if (terminated | truncated).any():
       return result
   pytest.fail("No env terminated within max_episode_length steps")
+
+
+def _terminate_immediately(env) -> torch.Tensor:
+  return torch.ones(env.num_envs, dtype=torch.bool, device=env.device)
+
+
+def test_termination_reward_is_applied_after_clipping(device):
+  cfg = _make_cfg(auto_reset=False)
+  cfg.reward_clip_min = 5.0
+  cfg.termination_reward = -10.0
+  cfg.terminations["failure"] = TerminationTermCfg(func=_terminate_immediately)
+  env = ManagerBasedRlEnv(cfg=cfg, device=device)
+  env.reset()
+
+  action = torch.zeros((env.num_envs, 1), device=env.device)
+  _, reward, terminated, truncated, _ = env.step(action)
+
+  assert terminated.all()
+  assert not truncated.any()
+  assert torch.allclose(reward, torch.full_like(reward, -5.0))
+  env.close()
 
 
 def test_auto_reset_true_resets_done_envs(device):
