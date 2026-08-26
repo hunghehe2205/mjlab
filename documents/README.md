@@ -11,6 +11,7 @@ Port phương pháp [RobustDexGrasp](https://github.com/zdchan/RobustDexGrasp)
 | [02-phase1-teacher-plan.md](02-phase1-teacher-plan.md) | Todo plan Phase 1: teacher policy (privileged, PPO) |
 | [03-phase2-objects-plan.md](03-phase2-objects-plan.md) | Todo plan Phase 2: scale bộ object + curriculum |
 | [04-phase3-student-plan.md](04-phase3-student-plan.md) | Todo plan Phase 3: student (single-view, DAgger + LSTM recon) |
+| [05-audit-fixes.md](05-audit-fixes.md) | Audit đối chiếu bản gốc: bug, khác biệt, rủi ro sim2real + thứ tự sửa |
 
 ## Trạng thái
 
