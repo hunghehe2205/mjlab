@@ -120,6 +120,15 @@ def test_fingertip_pads_have_collision(model: mujoco.MjModel) -> None:
       assert model.geom(i).group == 3  # collision class.
 
 
+def test_pad_parent_mapping(model: mujoco.MjModel) -> None:
+  # Each pad body folds into the sensor slot of its direct parent.
+  for pad, parent_idx in zip(c.PAD_BODIES, c.PAD_PARENT_INDICES, strict=True):
+    pad_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"{c.HAND_PREFIX}{pad}")
+    assert pad_id >= 0
+    parent_name = model.body(int(model.body(pad_id).parentid[0])).name
+    assert parent_name == f"{c.HAND_PREFIX}{c.CONTACT_BODIES[parent_idx]}"
+
+
 def test_init_finger_pose_valid(model: mujoco.MjModel) -> None:
   # Covers all 18 joints and stays within the soft limits reset clamps to;
   # otherwise the pose is silently altered on every reset.

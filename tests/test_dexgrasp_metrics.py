@@ -67,8 +67,15 @@ def test_hand_keypoint_depth_and_arm_action_metrics() -> None:
 
 
 def test_lift_metrics_track_displacement_from_reset() -> None:
+  # At reset, xpos (root_link_pos_w) is stale from the previous episode; the
+  # metrics must snapshot the freshly written qpos instead.
   obj = SimpleNamespace(
-    data=SimpleNamespace(root_link_pos_w=torch.tensor([[0.0, 0.0, 0.8]]))
+    is_fixed_base=False,
+    indexing=SimpleNamespace(free_joint_q_adr=[0, 1, 2, 3, 4, 5, 6]),
+    data=SimpleNamespace(
+      root_link_pos_w=torch.tensor([[0.0, 0.0, 1.3]]),  # stale
+      data=SimpleNamespace(qpos=torch.tensor([[0.0, 0.0, 0.8, 1.0, 0.0, 0.0, 0.0]])),
+    ),
   )
   env = cast(
     ManagerBasedRlEnv,

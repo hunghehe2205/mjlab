@@ -102,18 +102,24 @@ def get_dexgrasp_object_cfg(object_names: tuple[str, ...]) -> EntityCfg:
   return oc.get_phase1_variant_cfg(object_names)
 
 
-def get_hand_object_contact_sensor() -> ContactSensorCfg:
-  """Hand-vs-object contact sensor over the 16 contact bodies.
+# Body-mode slots only see the body's own geoms, so the welded pad bodies get
+# the 6 trailing slots; consumers fold them into the canonical 16 via
+# rc.PAD_PARENT_INDICES.
+_HAND_SENSOR_BODIES = rc.CONTACT_BODIES + rc.PAD_BODIES
 
-  Literal compiled names keep the canonical CONTACT_BODIES order on the
-  per-primary axis; net-force + history accumulates one impulse vector per
-  body over the control step's substeps.
+
+def get_hand_object_contact_sensor() -> ContactSensorCfg:
+  """Hand-vs-object contact sensor: 16 contact bodies + 6 pad slots.
+
+  Literal compiled names keep the canonical CONTACT_BODIES-then-PAD_BODIES
+  order on the per-primary axis; net-force + history gives one force vector
+  per body per substep.
   """
   return ContactSensorCfg(
     name="hand_object_contact",
     primary=ContactMatch(
       mode="body",
-      pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in rc.CONTACT_BODIES),
+      pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in _HAND_SENSOR_BODIES),
     ),
     secondary=ContactMatch(mode="subtree", pattern="object", entity="object"),
     fields=("force",),
@@ -127,7 +133,7 @@ def _hand_table_sensor(name: str, secondary: ContactMatch) -> ContactSensorCfg:
     name=name,
     primary=ContactMatch(
       mode="body",
-      pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in rc.CONTACT_BODIES),
+      pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in _HAND_SENSOR_BODIES),
     ),
     secondary=secondary,
     fields=("force",),
@@ -245,6 +251,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
       weight=REWARD_COEFFS["affordance_contact"],
       params={
         "sensor_name": "hand_object_contact",
+        "pad_parent_indices": rc.PAD_PARENT_INDICES,
         "mode": "flags",
         "divisor": 16.0,
         "weights": con_weights,
@@ -255,6 +262,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
       weight=REWARD_COEFFS["affordance_impulse"],
       params={
         "sensor_name": "hand_object_contact",
+        "pad_parent_indices": rc.PAD_PARENT_INDICES,
         "mode": "impulse_xy",
         "clip_high": clip_high,
         "weights": con_weights,
@@ -265,6 +273,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
       weight=REWARD_COEFFS["table_contact"],
       params={
         "sensor_name": "hand_table_contact",
+        "pad_parent_indices": rc.PAD_PARENT_INDICES,
         "mode": "flags",
         "divisor": 16.0,
         "weights": con_weights,
@@ -275,6 +284,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
       weight=REWARD_COEFFS["table_impulse"],
       params={
         "sensor_name": "hand_table_contact",
+        "pad_parent_indices": rc.PAD_PARENT_INDICES,
         "mode": "impulse",
         "clip_high": clip_high,
         "weights": con_weights,
@@ -431,6 +441,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   hand_center = SceneEntityCfg("robot", site_names=(rc.GRASP_CENTER_SITE,))
   actor_terms["joint_pos"].params["asset_cfg"] = joints
   actor_terms["pd_error"].params["asset_cfg"] = joints
+  actor_terms["contacts"].params["pad_parent_indices"] = rc.PAD_PARENT_INDICES
   actor_terms["keypoint_heights"].params["asset_cfg"] = keypoints
   actor_terms["arm_link_heights"].params["asset_cfg"] = arm_links
   actor_terms["hand_center"].params["asset_cfg"] = hand_center

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 __all__ = [
   "SKIP_IMPULSE",
   "FLAG_IMPULSE",
+  "sensor_impulse",
   "joint_pos",
   "pd_error",
   "link_heights",
@@ -39,12 +40,37 @@ __all__ = [
 ]
 
 # Reference impulse thresholds (N*s): contributions below SKIP_IMPULSE are
-# dropped and a body flags as in-contact above FLAG_IMPULSE. Baseline for
-# MuJoCo; recalibrate if the soft contact solver changes the impulse scale.
+# dropped and a body flags as in-contact above FLAG_IMPULSE. The reference
+# reads the impulse of one 10 ms sim step; sensor_impulse matches that scale.
 SKIP_IMPULSE = 0.001
 FLAG_IMPULSE = 0.01
 
 _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
+
+
+def sensor_impulse(
+  sensor: ContactSensor,
+  dt: float,
+  pad_parents: tuple[int, ...] | None = None,
+) -> torch.Tensor:
+  """Per-substep mean impulse vectors (B, P, 3), on the reference scale.
+
+  The reference reads one sim step's contact impulse after the substep loop;
+  averaging the net-force history over the control step's substeps and
+  scaling by the timestep reproduces that scale. With ``pad_parents``, the
+  trailing pad slots are vector-summed into their parent body slots (the
+  reference merges welded pad links into the parent body).
+  """
+  history = sensor.data.force_history
+  assert history is not None
+  impulse = history.mean(dim=2) * dt
+  if pad_parents is not None:
+    n_pads = len(pad_parents)
+    base = impulse[:, :-n_pads].clone()
+    idx = torch.as_tensor(pad_parents, dtype=torch.long, device=impulse.device)
+    base.index_add_(1, idx, impulse[:, -n_pads:])
+    impulse = base
+  return impulse
 
 
 def joint_pos(
@@ -96,23 +122,21 @@ def hand_center_pos(
 
 
 class HandObjectContacts:
-  """Contact flags + accumulated impulse magnitudes per hand contact body.
+  """Contact flags + impulse magnitudes per hand contact body.
 
-  The impulse is the net contact force summed over the control step's
-  substeps, scaled by the physics timestep, so it matches the reference
-  accumulated-impulse bookkeeping.
+  The impulse is on the reference single-substep scale (see sensor_impulse);
+  pad sensor slots fold into their parent contact bodies.
   """
 
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
     sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
     self._sensor = sensor
     self._dt = float(env.sim.cfg.mujoco.timestep)
+    self._pad_parents = cfg.params.get("pad_parent_indices")
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
-    history = self._sensor.data.force_history
-    assert history is not None
-    impulse = history.sum(dim=2) * self._dt  # (B, P, 3)
+    impulse = sensor_impulse(self._sensor, self._dt, self._pad_parents)
     magnitude = impulse.norm(dim=-1)
     # The reference drops per-contact impulses below SKIP_IMPULSE before
     # accumulating; netforce sums first, so floor the accumulated magnitude.

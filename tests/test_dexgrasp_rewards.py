@@ -11,9 +11,11 @@ import torch
 
 import mjlab.tasks  # noqa: F401  (triggers task registration)
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
+from mjlab.sensor import ContactSensor
 from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
   dexgrasp_ur5e_rh5dg2_env_cfg,
 )
+from mjlab.tasks.dexgrasp.mdp.observations import sensor_impulse
 from mjlab.tasks.dexgrasp.mdp.rewards import (
   REWARD_COEFFS,
   ContactReward,
@@ -92,6 +94,57 @@ def test_contact_reward_combines_pair_impulses_before_norm() -> None:
   reward = ContactReward(cfg, env)(env)
 
   torch.testing.assert_close(reward, torch.zeros(1))
+
+
+def test_sensor_impulse_reference_scale_and_pad_fold() -> None:
+  # Mean over substeps * dt (reference single-substep scale); the trailing
+  # pad slot vector-sums into its parent slot.
+  history = torch.tensor(
+    [
+      [
+        [[1.0, 0.0, 0.0], [3.0, 0.0, 0.0]],  # slot 0: mean force (2, 0, 0)
+        [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],  # slot 1: no contact
+        [[0.0, 2.0, 0.0], [0.0, 4.0, 0.0]],  # pad slot -> parent 0
+      ]
+    ]
+  )
+  sensor = cast(
+    ContactSensor, SimpleNamespace(data=SimpleNamespace(force_history=history))
+  )
+
+  impulse = sensor_impulse(sensor, 0.01, pad_parents=(0,))
+
+  torch.testing.assert_close(
+    impulse, torch.tensor([[[0.02, 0.03, 0.0], [0.0, 0.0, 0.0]]])
+  )
+
+
+def test_contact_reward_pad_contact_fires_parent_flag() -> None:
+  # Force only on the pad slot must flag the parent contact body.
+  history = torch.zeros((1, 3, 1, 3))
+  history[0, 2, 0, 0] = 2.0  # pad slot, folds into parent slot 1
+  sensor = SimpleNamespace(data=SimpleNamespace(force_history=history))
+  env = cast(
+    ManagerBasedRlEnv,
+    SimpleNamespace(
+      scene={"hand": sensor},
+      sim=SimpleNamespace(cfg=SimpleNamespace(mujoco=SimpleNamespace(timestep=1.0))),
+      device="cpu",
+    ),
+  )
+  cfg = SimpleNamespace(
+    params={
+      "sensor_name": "hand",
+      "pad_parent_indices": (1,),
+      "mode": "flags",
+      "weights": [0.0, 1.0],
+      "divisor": 1.0,
+    }
+  )
+
+  reward = ContactReward(cfg, env)(env)
+
+  torch.testing.assert_close(reward, torch.tensor([1.0]))
 
 
 @pytest.mark.slow

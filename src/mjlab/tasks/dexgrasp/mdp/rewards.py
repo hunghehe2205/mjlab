@@ -18,7 +18,12 @@ from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactSensor
-from mjlab.tasks.dexgrasp.mdp.observations import FLAG_IMPULSE, keypoint_min_distances
+from mjlab.tasks.dexgrasp.mdp.metrics import object_root_pos_state
+from mjlab.tasks.dexgrasp.mdp.observations import (
+  FLAG_IMPULSE,
+  keypoint_min_distances,
+  sensor_impulse,
+)
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -97,13 +102,6 @@ def contact_weights(
   w /= w.sum()
   w *= 16.0
   return w
-
-
-def sensor_impulse(sensor: ContactSensor, dt: float) -> torch.Tensor:
-  """Accumulated impulse vectors (B, P, 3) over the sensor history."""
-  history = sensor.data.force_history
-  assert history is not None
-  return history.sum(dim=2) * dt
 
 
 class AffordanceDistance:
@@ -188,6 +186,7 @@ class ContactReward:
   mode "impulse_xy": sum(weights * clamp(|impulse_xy|, high)).
   mode "impulse": sum(weights * clamp(|impulse|, high)).
   Without weights, the per-body vector is reduced by norm (arm terms).
+  Pad sensor slots fold into their parent bodies via pad_parent_indices.
   """
 
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
@@ -198,6 +197,7 @@ class ContactReward:
       env.scene[name] for name in sensor_names
     )
     self._dt = float(env.sim.cfg.mujoco.timestep)
+    self._pad_parents = cfg.params.get("pad_parent_indices")
     self._mode = cfg.params["mode"]
     self._divisor = float(cfg.params.get("divisor", 1.0))
     clip_high = cfg.params.get("clip_high")
@@ -214,7 +214,9 @@ class ContactReward:
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
-    impulses = [sensor_impulse(sensor, self._dt) for sensor in self._sensors]
+    impulses = [
+      sensor_impulse(sensor, self._dt, self._pad_parents) for sensor in self._sensors
+    ]
     impulse = torch.stack(impulses).sum(dim=0)
     if self._mode == "flags":
       value = (impulse.norm(dim=-1) > FLAG_IMPULSE).float()
@@ -250,18 +252,9 @@ class ObjectDisplacement:
     n = env.num_envs
     self._init_pos = torch.zeros((n, 3), device=env.device)
 
-  def _root_pos_w(self) -> torch.Tensor:
-    if not self._object.is_fixed_base:
-      q_adr = self._object.indexing.free_joint_q_adr[:3]
-      return self._object.data.data.qpos[:, q_adr]
-    mocap_id = self._object.indexing.mocap_id
-    if mocap_id is not None:
-      return self._object.data.data.mocap_pos[:, mocap_id]
-    return self._object.data.root_link_pos_w
-
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
     ids = slice(None) if env_ids is None else env_ids
-    self._init_pos[ids] = self._root_pos_w()[ids]
+    self._init_pos[ids] = object_root_pos_state(self._object)[ids]
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs

@@ -158,7 +158,8 @@ KEYPOINT_BODIES = (
 
 # Contact bodies for the contact/impulse observation: palm plus the three
 # distal links of each finger. The pad bodies are fixed children of the dip
-# links (and of the palm), so body-subtree contact sensors see pad contacts.
+# links (and of the palm); body-mode sensors don't see child-body geoms, so
+# the pads get their own sensor slots (PAD_BODIES) folded into these 16.
 CONTACT_BODIES = (
   "R_hand_palm",
   "R_thumb_mcp",
@@ -177,6 +178,18 @@ CONTACT_BODIES = (
   "R_pinky_pip",
   "R_pinky_dip",
 )
+
+# Welded pad bodies holding the pad collision meshes, and the CONTACT_BODIES
+# slot each folds into (the pad's parent: per-finger dip link, then palm).
+PAD_BODIES = (
+  "R_thumb_force_sensor",
+  "R_index_force_sensor",
+  "R_middle_force_sensor",
+  "R_ring_force_sensor",
+  "R_pinky_force_sensor",
+  "R_palm_force_sensor",
+)
+PAD_PARENT_INDICES = (3, 6, 9, 12, 15, 0)
 
 # Arm bodies whose frames give the 6 arm-link heights above the table.
 ARM_LINK_BODIES = (

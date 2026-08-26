@@ -11,6 +11,21 @@ if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
 
+def object_root_pos_state(obj: Entity) -> torch.Tensor:
+  """Root position read from qpos/mocap state, valid before forward().
+
+  Reset-time readers must use this: events write qpos inside _reset_idx and
+  kinematics (xpos) refresh only at the later forward() call.
+  """
+  if not obj.is_fixed_base:
+    q_adr = obj.indexing.free_joint_q_adr[:3]
+    return obj.data.data.qpos[:, q_adr]
+  mocap_id = obj.indexing.mocap_id
+  if mocap_id is not None:
+    return obj.data.data.mocap_pos[:, mocap_id]
+  return obj.data.root_link_pos_w
+
+
 def object_linear_speed(
   env: ManagerBasedRlEnv, object_entity: str = "object"
 ) -> torch.Tensor:
@@ -65,7 +80,7 @@ class ObjectLiftHeight:
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
     if env_ids is None:
       env_ids = slice(None)
-    self._initial_z[env_ids] = self._object.data.root_link_pos_w[env_ids, 2]
+    self._initial_z[env_ids] = object_root_pos_state(self._object)[env_ids, 2]
 
 
 class LiftSuccess(ObjectLiftHeight):
