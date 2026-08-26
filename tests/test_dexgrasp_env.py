@@ -13,6 +13,7 @@ from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
 from mjlab.entity.variants import VariantEntityCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
+from mjlab.sensor import ContactSensorCfg
 from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
   ARM_MOUNT_Z,
   HAND_TABLE_TERMINATION_TOLERANCE,
@@ -20,10 +21,16 @@ from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
   SKELETON_OBJECT,
   dexgrasp_ur5e_rh5dg2_env_cfg,
 )
+from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.rl_cfg import (
+  dexgrasp_teacher_ppo_runner_cfg,
+)
 from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import (
   TABLE_FRICTION,
   TABLE_TOP_Z,
   get_arena_spec,
+)
+from mjlab.tasks.dexgrasp.mdp.actions import (
+  ReferenceRelativeJointPositionActionCfg,
 )
 from mjlab.tasks.registry import list_tasks
 
@@ -70,6 +77,55 @@ def test_failure_semantics_are_explicit_in_training_config() -> None:
 
   assert cfg.termination_reward == pytest.approx(-10.0)
   assert params["tolerance"] == pytest.approx(HAND_TABLE_TERMINATION_TOLERANCE)
+
+
+def test_reference_training_randomization_and_policy_config() -> None:
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
+  play_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(play=True)
+  eval_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(
+    object_name=SKELETON_OBJECT, non_uniform_sampling=False
+  )
+  action = cfg.actions["joint_pos"]
+  runner = dexgrasp_teacher_ppo_runner_cfg()
+
+  assert isinstance(action, ReferenceRelativeJointPositionActionCfg)
+  assert action.first_substep_delay_prob == pytest.approx(0.5)
+  assert cfg.events["reset_grasp_pose"].params["non_uniform_sampling"] is True
+  assert play_cfg.events["reset_grasp_pose"].params["non_uniform_sampling"] is False
+  assert eval_cfg.events["reset_grasp_pose"].params["non_uniform_sampling"] is False
+  assert runner.actor.activation == "lrelu"
+  assert runner.critic.activation == "lrelu"
+  assert runner.actor.obs_normalization is False
+  assert runner.critic.obs_normalization is False
+  assert tuple(cfg.observations) == ("actor",)
+  assert runner.obs_groups["critic"] == ("actor",)
+  distribution_cfg = runner.actor.distribution_cfg
+  assert distribution_cfg is not None
+  assert distribution_cfg["std_range"][0] == pytest.approx(0.2)
+
+
+def test_arm_contact_configuration_matches_reference_pairs() -> None:
+  cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
+  sensors = {sensor.name: sensor for sensor in cfg.scene.sensors}
+  arm_world = sensors["arm_world_contact"]
+  arm_table = sensors["arm_table_contact"]
+  arm_object = sensors["arm_object_contact"]
+
+  assert isinstance(arm_world, ContactSensorCfg)
+  assert isinstance(arm_table, ContactSensorCfg)
+  assert isinstance(arm_object, ContactSensorCfg)
+  assert arm_world.fields == ("found",)
+  assert arm_world.history_length == 0
+  assert arm_table.fields == ("force",)
+  assert arm_object.fields == ("force",)
+  assert cfg.rewards["arm_contact"].params["sensor_names"] == (
+    "arm_table_contact",
+    "arm_object_contact",
+  )
+  assert cfg.rewards["arm_impulse"].params["sensor_names"] == (
+    "arm_table_contact",
+    "arm_object_contact",
+  )
 
 
 @pytest.mark.slow

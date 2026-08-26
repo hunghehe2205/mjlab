@@ -78,7 +78,9 @@ def run_object_evaluation(
   device: str,
 ) -> float:
   """Run policy grasping followed by a deterministic vertical lift."""
-  env_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=object_name)
+  env_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(
+    object_name=object_name, non_uniform_sampling=False
+  )
   env_cfg.scene.num_envs = cfg.num_envs
   env_cfg.terminations = {}
   env_cfg.auto_reset = False
@@ -131,7 +133,9 @@ def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
   configure_torch_backends()
   device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
   agent_cfg = dexgrasp_teacher_ppo_runner_cfg()
-  bootstrap_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=cfg.objects[0])
+  bootstrap_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(
+    object_name=cfg.objects[0], non_uniform_sampling=False
+  )
   bootstrap_cfg.scene.num_envs = 1
   bootstrap_cfg.terminations = {}
   bootstrap_cfg.auto_reset = False

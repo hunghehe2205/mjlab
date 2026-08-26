@@ -35,6 +35,7 @@ class ResetGraspPose:
     self._pcds = [obj.load_surface_points().astype(np.float64) for obj in objects]
     self._lowest = np.asarray([obj.lowest_point for obj in objects])
     self._clearance = float(p.get("object_clearance", 0.002))
+    self._non_uniform_sampling = bool(p.get("non_uniform_sampling", True))
     self._kin = ArmKinematics(mount_pos=(0.0, 0.0, float(p["mount_z"])))
     home = rc.HOME_KEYFRAME.joint_pos or {}
     self._seed = np.array([home[n] for n in rc.ARM_JOINT_NAMES])
@@ -59,8 +60,9 @@ class ResetGraspPose:
     table_top_z: float = 0.771,
     mount_z: float = 0.771,
     object_clearance: float = 0.002,
+    non_uniform_sampling: bool = True,
   ) -> None:
-    del object_names, table_top_z, mount_z, object_clearance
+    del object_names, table_top_z, mount_z, object_clearance, non_uniform_sampling
     ids = resolve_env_ids(env, env_ids)
     device = env.device
     robot = env.scene["robot"]
@@ -118,5 +120,6 @@ class ResetGraspPose:
       self._rng,
       self._table_top_z,
       self._lowest[variant],
+      non_uniform=self._non_uniform_sampling,
       clearance=self._clearance,
     )

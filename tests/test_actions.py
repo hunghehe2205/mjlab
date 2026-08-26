@@ -21,6 +21,9 @@ from mjlab.envs.mdp.actions import (
   TendonVelocityActionCfg,
 )
 from mjlab.sim.sim import Simulation, SimulationCfg
+from mjlab.tasks.dexgrasp.mdp.actions import (
+  ReferenceRelativeJointPositionActionCfg,
+)
 
 
 @pytest.fixture(scope="module")
@@ -282,6 +285,43 @@ def test_relative_joint_position_nonzero_action(floating_base_entity, device):
 
   expected = current_pos + raw * scale
   assert torch.allclose(entity.data.joint_pos_target[:, action.target_ids], expected)
+
+
+def test_dexgrasp_reference_action_delays_only_first_substep(
+  floating_base_entity, device
+):
+  entity = floating_base_entity
+  env = make_env(entity, "robot", device)
+  cfg = ReferenceRelativeJointPositionActionCfg(
+    entity_name="robot",
+    actuator_names=("joint.*",),
+    scale=0.1,
+    first_substep_delay_prob=1.0,
+  )
+  action = cfg.build(env)
+  action.reset()
+
+  previous = action.target.clone()
+  action.process_actions(torch.ones(4, action.action_dim, device=device))
+  current = action.target.clone()
+
+  action.apply_actions()
+  torch.testing.assert_close(
+    entity.data.joint_pos_target[:, action.target_ids], previous
+  )
+  action.apply_actions()
+  torch.testing.assert_close(
+    entity.data.joint_pos_target[:, action.target_ids], current
+  )
+
+
+def test_dexgrasp_reference_action_validates_delay_probability():
+  with pytest.raises(ValueError, match="first_substep_delay_prob"):
+    ReferenceRelativeJointPositionActionCfg(
+      entity_name="robot",
+      actuator_names=("joint.*",),
+      first_substep_delay_prob=1.1,
+    )
 
 
 def test_relative_joint_position_ignores_encoder_bias(floating_base_entity, device):

@@ -2,8 +2,8 @@
 
 Polar tabletop object poses and the `sample_rot_mats` palm-roll candidates,
 ported from RobustDexGrasp's train.py / initial_pose_final.py. Pure numpy;
-object-pose randomness is the caller's rng. Phase 1 samples uniformly; the
-edge-biased Beta branch (``non_uniform=True``) is wired for Phase 2.
+object-pose randomness is the caller's rng. Training mixes uniform samples
+with the reference edge-biased Beta branch; evaluation stays uniform.
 
 Poses are arm-base-centric (base at the origin, table in -y), the same layout
 as the reference, so the polar ranges port directly; the reset event adds the

@@ -116,7 +116,7 @@ def get_hand_object_contact_sensor() -> ContactSensorCfg:
       pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in rc.CONTACT_BODIES),
     ),
     secondary=ContactMatch(mode="subtree", pattern="object", entity="object"),
-    fields=("force", "found"),
+    fields=("force",),
     reduce="netforce",
     history_length=DECIMATION,
   )
@@ -130,7 +130,7 @@ def _hand_table_sensor(name: str, secondary: ContactMatch) -> ContactSensorCfg:
       pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in rc.CONTACT_BODIES),
     ),
     secondary=secondary,
-    fields=("force", "found"),
+    fields=("force",),
     reduce="netforce",
     history_length=DECIMATION,
   )
@@ -144,29 +144,46 @@ def get_hand_table_contact_sensor() -> ContactSensorCfg:
   )
 
 
-def _arm_sensor(name: str, secondary: ContactMatch | None) -> ContactSensorCfg:
+def _arm_sensor(
+  name: str,
+  secondary: ContactMatch | None,
+  fields: tuple[str, ...],
+  history_length: int,
+) -> ContactSensorCfg:
   return ContactSensorCfg(
     name=name,
     primary=ContactMatch(
       mode="body", pattern=tuple(f"robot/{b}" for b in rc.ARM_LINK_BODIES)
     ),
     secondary=secondary,
-    fields=("force", "found"),
+    fields=fields,
     reduce="netforce",
-    history_length=DECIMATION,
+    history_length=history_length,
   )
 
 
 def get_arm_world_contact_sensor() -> ContactSensorCfg:
   """Arm any-contact flags (arm_collision reward)."""
-  return _arm_sensor("arm_world_contact", None)
+  return _arm_sensor("arm_world_contact", None, ("found",), 0)
 
 
 def get_arm_table_contact_sensor() -> ContactSensorCfg:
-  """Arm-vs-table contact sensor (arm contact/impulse rewards)."""
+  """Arm-vs-table impulse sensor."""
   return _arm_sensor(
     "arm_table_contact",
     ContactMatch(mode="geom", pattern="table", entity="arena"),
+    ("force",),
+    DECIMATION,
+  )
+
+
+def get_arm_object_contact_sensor() -> ContactSensorCfg:
+  """Arm-vs-object impulse sensor."""
+  return _arm_sensor(
+    "arm_object_contact",
+    ContactMatch(mode="subtree", pattern="object", entity="object"),
+    ("force",),
+    DECIMATION,
   )
 
 
@@ -266,12 +283,18 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
     "arm_contact": RewardTermCfg(
       func=mdp.ContactReward,
       weight=REWARD_COEFFS["arm_contact"],
-      params={"sensor_name": "arm_table_contact", "mode": "flags"},
+      params={
+        "sensor_names": ("arm_table_contact", "arm_object_contact"),
+        "mode": "flags",
+      },
     ),
     "arm_impulse": RewardTermCfg(
       func=mdp.ContactReward,
       weight=REWARD_COEFFS["arm_impulse"],
-      params={"sensor_name": "arm_table_contact", "mode": "impulse"},
+      params={
+        "sensor_names": ("arm_table_contact", "arm_object_contact"),
+        "mode": "impulse",
+      },
     ),
     "arm_collision": RewardTermCfg(
       func=mdp.ArmCollision,
@@ -315,6 +338,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   play: bool = False,
   object_name: str | None = None,
   object_names: tuple[str, ...] | None = None,
+  non_uniform_sampling: bool = True,
 ) -> ManagerBasedRlEnvCfg:
   if object_name is not None and object_names is not None:
     raise ValueError("Specify either object_name or object_names, not both")
@@ -331,7 +355,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     if len(selected_object_names) > 1:
       selected_object_names = (SKELETON_OBJECT,)
     cfg.scene.entities["object"] = get_skeleton_object_cfg(
-      selected_object_names[0], fixed=True
+      next(iter(selected_object_names)), fixed=True
     )
   else:
     cfg.scene.entities["object"] = get_dexgrasp_object_cfg(selected_object_names)
@@ -342,6 +366,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     get_hand_table_contact_sensor(),
     get_arm_world_contact_sensor(),
     get_arm_table_contact_sensor(),
+    get_arm_object_contact_sensor(),
   )
   cfg.rewards = get_dexgrasp_rewards(selected_object_names)
   # Per-robot observation scopes. preserve_order locks the documented frame
@@ -429,6 +454,7 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
       "table_top_z": TABLE_TOP_Z,
       "mount_z": ARM_MOUNT_Z,
       "object_clearance": 0.0 if play else 0.002,
+      "non_uniform_sampling": non_uniform_sampling and not play,
     },
   )
 

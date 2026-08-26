@@ -3,6 +3,8 @@
 import io
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import torch
@@ -14,6 +16,7 @@ from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
 )
 from mjlab.tasks.dexgrasp.mdp.rewards import (
   REWARD_COEFFS,
+  ContactReward,
   affordance_weights,
   contact_weights,
 )
@@ -67,6 +70,28 @@ def test_reward_coeffs_complete() -> None:
     "arm_joint_velocity": -1.0,
   }
   assert REWARD_COEFFS == expected
+
+
+def test_contact_reward_combines_pair_impulses_before_norm() -> None:
+  table = SimpleNamespace(
+    data=SimpleNamespace(force_history=torch.tensor([[[[1.0, 0.0, 0.0]]]]))
+  )
+  obj = SimpleNamespace(
+    data=SimpleNamespace(force_history=torch.tensor([[[[-1.0, 0.0, 0.0]]]]))
+  )
+  env = cast(
+    ManagerBasedRlEnv,
+    SimpleNamespace(
+      scene={"table": table, "object": obj},
+      sim=SimpleNamespace(cfg=SimpleNamespace(mujoco=SimpleNamespace(timestep=1.0))),
+      device="cpu",
+    ),
+  )
+  cfg = SimpleNamespace(params={"sensor_names": ("table", "object"), "mode": "impulse"})
+
+  reward = ContactReward(cfg, env)(env)
+
+  torch.testing.assert_close(reward, torch.zeros(1))
 
 
 @pytest.mark.slow

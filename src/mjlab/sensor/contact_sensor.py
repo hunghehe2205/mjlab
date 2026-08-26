@@ -241,6 +241,8 @@ class ContactSensor(Sensor[ContactData]):
     self._device: str | None = None
     self._air_time_state: _AirTimeState | None = None
     self._history_state: dict[str, torch.Tensor] | None = None
+    self._history_head = -1
+    self._history_orders: torch.Tensor | None = None
 
   @property
   def primary_names(self) -> list[str]:
@@ -320,6 +322,9 @@ class ContactSensor(Sensor[ContactData]):
       n_envs = data.time.shape[0]
       n_contacts = n_primary * self.cfg.num_slots
       h = self.cfg.history_length
+      offsets = torch.arange(h, device=device)
+      heads = torch.arange(h, device=device).unsqueeze(1)
+      self._history_orders = (heads - offsets) % h
       self._history_state = {}
       if "force" in self.cfg.fields:
         self._history_state["force"] = torch.zeros(
@@ -342,9 +347,9 @@ class ContactSensor(Sensor[ContactData]):
       out.current_contact_time = self._air_time_state.current_contact_time
       out.last_contact_time = self._air_time_state.last_contact_time
     if self._history_state is not None:
-      out.force_history = self._history_state.get("force")
-      out.torque_history = self._history_state.get("torque")
-      out.dist_history = self._history_state.get("dist")
+      out.force_history = self._ordered_history("force")
+      out.torque_history = self._ordered_history("torque")
+      out.dist_history = self._ordered_history("dist")
     return out
 
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
@@ -485,22 +490,28 @@ class ContactSensor(Sensor[ContactData]):
     )
 
   def _update_history(self) -> None:
-    """Roll history buffer and insert current contact data at index 0."""
+    """Insert current contact data into the circular history buffer."""
     assert self._history_state is not None
 
     contact_data = self._extract_sensor_data()
+    self._history_head = (self._history_head + 1) % self.cfg.history_length
 
     if "force" in self._history_state and contact_data.force is not None:
-      self._history_state["force"] = self._history_state["force"].roll(1, dims=2)
-      self._history_state["force"][:, :, 0, :] = contact_data.force
+      self._history_state["force"][:, :, self._history_head, :] = contact_data.force
 
     if "torque" in self._history_state and contact_data.torque is not None:
-      self._history_state["torque"] = self._history_state["torque"].roll(1, dims=2)
-      self._history_state["torque"][:, :, 0, :] = contact_data.torque
+      self._history_state["torque"][:, :, self._history_head, :] = contact_data.torque
 
     if "dist" in self._history_state and contact_data.dist is not None:
-      self._history_state["dist"] = self._history_state["dist"].roll(1, dims=2)
-      self._history_state["dist"][:, :, 0] = contact_data.dist
+      self._history_state["dist"][:, :, self._history_head] = contact_data.dist
+
+  def _ordered_history(self, field: str) -> torch.Tensor | None:
+    assert self._history_state is not None
+    history = self._history_state.get(field)
+    if history is None or self._history_head < 0:
+      return history
+    assert self._history_orders is not None
+    return history.index_select(2, self._history_orders[self._history_head])
 
   def _resolve_primary_names(
     self, entities: dict[str, Entity], match: ContactMatch

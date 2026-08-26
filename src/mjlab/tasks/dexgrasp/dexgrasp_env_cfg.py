@@ -13,7 +13,6 @@ import mujoco
 
 from mjlab.entity import EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
-from mjlab.envs.mdp.actions import RelativeJointPositionActionCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
@@ -32,8 +31,7 @@ from mjlab.viewer import ViewerConfig
 
 TABLE_TOP_Z = 0.771
 ARM_MOUNT_Z = TABLE_TOP_Z - 0.04
-# Match the low-friction tabletop used by RobustDexGrasp. Its priority makes this
-# value win over the per-object defaults when MuJoCo combines contact parameters.
+# Reference tabletop friction.
 TABLE_FRICTION = 0.2
 
 # 1.2 m x 1.1 m table. Keep its near edge at y=-0.2 so it remains separated
@@ -118,21 +116,21 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       },
     ),
   }
-  # Teacher obs are privileged and clean; corruption is on (repo convention) but
-  # no term has a noise model, so it is a no-op. Critic = actor (both privileged).
+  # Teacher obs are privileged and clean; corruption is a no-op without noise.
+  # The runner maps both actor and critic to this group, matching the reference.
   observations = {
     "actor": ObservationGroupCfg(actor_terms, enable_corruption=True),
-    "critic": ObservationGroupCfg({**actor_terms}, enable_corruption=False),
   }
 
   actions: dict[str, ActionTermCfg] = {
-    "joint_pos": RelativeJointPositionActionCfg(
+    "joint_pos": mdp.ReferenceRelativeJointPositionActionCfg(
       entity_name="robot",
       actuator_names=(".*",),
       scale=1.0,  # Override per-robot (arm 0.005 / finger 0.015).
       # Clamp the absolute target to soft joint limits (fingers have no actuator
       # ctrlrange to bound them; the delta itself stays unclipped -- see §D).
       clip_to_joint_limits=True,
+      first_substep_delay_prob=0.5,
     )
   }
 
@@ -212,7 +210,5 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
     episode_length_s=EPISODE_LENGTH_S,
     scale_rewards_by_dt=False,  # Reference rewards are per control step.
     reward_clip_min=-2.0,  # Reference total-reward floor.
-    # RobustDexGrasp specifies terminalReward=-10. Apply it after clipping so a
-    # task failure cannot be converted back to the ordinary -2 per-step floor.
-    termination_reward=-10.0,
+    termination_reward=-10.0,  # Applied after reward clipping.
   )

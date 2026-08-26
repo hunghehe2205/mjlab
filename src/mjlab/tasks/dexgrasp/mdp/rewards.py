@@ -191,7 +191,12 @@ class ContactReward:
   """
 
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
-    self._sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
+    sensor_names = cfg.params.get("sensor_names")
+    if sensor_names is None:
+      sensor_names = (cfg.params["sensor_name"],)
+    self._sensors: tuple[ContactSensor, ...] = tuple(
+      env.scene[name] for name in sensor_names
+    )
     self._dt = float(env.sim.cfg.mujoco.timestep)
     self._mode = cfg.params["mode"]
     self._divisor = float(cfg.params.get("divisor", 1.0))
@@ -209,7 +214,8 @@ class ContactReward:
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
-    impulse = sensor_impulse(self._sensor, self._dt)
+    impulses = [sensor_impulse(sensor, self._dt) for sensor in self._sensors]
+    impulse = torch.stack(impulses).sum(dim=0)
     if self._mode == "flags":
       value = (impulse.norm(dim=-1) > FLAG_IMPULSE).float()
     elif self._mode == "impulse_xy":

@@ -955,6 +955,28 @@ def test_history_ordering(device):
   torch.testing.assert_close(data.force_history[:, :, 2, :], forces_over_time[-3])
 
 
+def test_history_update_reuses_circular_storage(device):
+  sensor_cfg = ContactSensorCfg(
+    name="box_contact",
+    primary=ContactMatch(mode="geom", pattern="box_geom", entity="box"),
+    secondary=None,
+    fields=("force",),
+    history_length=3,
+  )
+  scene, sim = create_scene_with_sensor(FALLING_BOX_XML, "box", sensor_cfg, device)
+  sensor = scene["box_contact"]
+  history_state = sensor._history_state
+  assert history_state is not None
+  history = history_state["force"]
+  storage_ptr = history.data_ptr()
+
+  for _ in range(5):
+    sim.step()
+    scene.update(dt=sim.cfg.mujoco.timestep)
+
+  assert history_state["force"].data_ptr() == storage_ptr
+
+
 def test_history_reset(device):
   """Verify reset clears history for specified environments."""
   history_len = 5
