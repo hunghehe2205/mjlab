@@ -76,7 +76,7 @@ def run_object_evaluation(
   cfg: EvaluateConfig,
   policy: torch.nn.Module,
   device: str,
-) -> float:
+) -> dict[str, float]:
   """Run policy grasping followed by a deterministic vertical lift."""
   env_cfg = dexgrasp_ur5e_rh5dg2_env_cfg(
     object_name=object_name, non_uniform_sampling=False
@@ -94,32 +94,36 @@ def run_object_evaluation(
 
   robot = env.scene["robot"]
   obj = env.scene["object"]
+  n_arm = len(rc.ARM_JOINT_NAMES)
   arm_ids = [robot.joint_names.index(name) for name in rc.ARM_JOINT_NAMES]
   initial_arm = robot.data.joint_pos[:, arm_ids].cpu().numpy()
   initial_object_z = obj.data.root_link_pos_w[:, 2].clone()
   kin = ArmKinematics(mount_pos=(0.0, 0.0, ARM_MOUNT_Z))
   target_arm, reachable_np = lift_targets(initial_arm, kin, cfg.lift_height)
   target_arm_t = torch.as_tensor(target_arm, device=device, dtype=torch.float)
+  initial_arm_t = torch.as_tensor(initial_arm, device=device, dtype=torch.float)
   reachable = torch.as_tensor(reachable_np, device=device)
-  peak_object_z = initial_object_z.clone()
 
-  for step in range(1, cfg.lift_steps + 1):
-    alpha = step / cfg.lift_steps
-    desired = torch.lerp(
-      torch.as_tensor(initial_arm, device=device, dtype=torch.float),
-      target_arm_t,
-      alpha,
-    )
-    current = robot.data.joint_pos[:, arm_ids]
-    actions = torch.zeros(cfg.num_envs, len(rc.ALL_JOINT_NAMES), device=device)
-    actions[:, : len(rc.ARM_JOINT_NAMES)] = (desired - current) / rc.ACTION_SCALE_ARM
-    actions[:, : len(rc.ARM_JOINT_NAMES)].clamp_(-1.0, 1.0)
-    vec_env.step(actions)
-    peak_object_z = torch.maximum(peak_object_z, obj.data.root_link_pos_w[:, 2])
+  # Fingers stay under policy control through the lift (the reference keeps
+  # squeezing); only the arm is scripted, ramping toward the raised target.
+  with torch.no_grad():
+    for step in range(1, cfg.lift_steps + 1):
+      alpha = step / cfg.lift_steps
+      desired = torch.lerp(initial_arm_t, target_arm_t, alpha)
+      current = robot.data.joint_pos[:, arm_ids]
+      actions = policy(obs).clone()
+      actions[:, :n_arm] = ((desired - current) / rc.ACTION_SCALE_ARM).clamp(-1.0, 1.0)
+      obs, _, _, _ = vec_env.step(actions)
 
-  success = reachable & (peak_object_z - initial_object_z > cfg.success_height)
+  # Final height, not peak: a transient bounce must not count as a hold.
+  final_gain = obj.data.root_link_pos_w[:, 2] - initial_object_z
+  success = reachable & (final_gain > cfg.success_height)
   vec_env.close()
-  return float(success.float().mean())
+  return {
+    "success": float(success.float().mean()),
+    "reachable": float(reachable.float().mean()),
+    "mean_gain": float(final_gain[reachable].mean()) if reachable.any() else 0.0,
+  }
 
 
 def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
@@ -146,14 +150,20 @@ def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
   policy = runner.get_inference_policy(device=device)
   vec_env.close()
 
-  metrics = {
+  details = {
     name: run_object_evaluation(name, cfg, policy, device) for name in cfg.objects
   }
-  for name, success_rate in metrics.items():
-    print(f"{name}: {success_rate:.1%} lift success")
+  metrics = {name: d["success"] for name, d in details.items()}
+  for name, d in sorted(details.items(), key=lambda kv: kv[1]["success"]):
+    print(
+      f"{name:<22} success {d['success']:5.1%}  "
+      f"reachable {d['reachable']:5.1%}  mean_gain {d['mean_gain']:+.3f} m"
+    )
+  overall = sum(metrics.values()) / len(metrics)
+  print(f"{'OVERALL':<22} success {overall:5.1%}")
   if cfg.output_file is not None:
     cfg.output_file.parent.mkdir(parents=True, exist_ok=True)
-    cfg.output_file.write_text(json.dumps(metrics, indent=2) + "\n")
+    cfg.output_file.write_text(json.dumps(details, indent=2) + "\n")
   return metrics
 
 
