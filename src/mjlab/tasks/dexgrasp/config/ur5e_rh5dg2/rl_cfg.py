@@ -33,7 +33,7 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
       clip_param=0.2,
       entropy_coef=0.0,
       num_learning_epochs=4,
-      num_mini_batches=4,
+      num_mini_batches=16,  # 352 env / 16 = 1540 samples/minibatch (reference); 4x more SGD steps/rollout than 4.
       learning_rate=5.0e-4,
       schedule="adaptive",
       gamma=0.996,

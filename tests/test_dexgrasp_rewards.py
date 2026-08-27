@@ -52,7 +52,8 @@ def test_contact_weights() -> None:
 
 
 def test_reward_coeffs_complete() -> None:
-  # Every reference coeff maps to a configured term weight.
+  # Object-disturbance weights are intentionally softened from the reference
+  # (-15/-0.2/-5) to break the early-exploration trap; see REWARD_COEFFS.
   expected = {
     "affordance_distance": 0.5,
     "affordance_contact": 1.5,
@@ -64,9 +65,9 @@ def test_reward_coeffs_complete() -> None:
     "arm_contact": -0.1,
     "arm_impulse": -0.1,
     "arm_collision": -1.0,
-    "object_velocity": -15.0,
-    "object_angular_velocity": -0.2,
-    "object_displacement": -5.0,
+    "object_velocity": -5.0,
+    "object_angular_velocity": -0.1,
+    "object_displacement": -2.0,
     "wrist_velocity": -1.0,
     "wrist_angular_velocity": -0.1,
     "arm_joint_velocity": -1.0,
