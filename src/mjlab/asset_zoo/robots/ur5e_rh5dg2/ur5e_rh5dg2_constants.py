@@ -28,6 +28,31 @@ HAND_XML: Path = _XMLS / "right_hand.xml"
 assert UR5E_XML.exists()
 assert HAND_XML.exists()
 
+ROBOT_FRICTION = 0.8
+
+# Arm servo bandwidth. The menagerie gains give kd/kp = 0.2 s -- exactly the 5 Hz
+# control period -- so a saturated action only realizes 1-exp(-1) = 63% of its
+# delta. Retuning to a uniform natural frequency with zeta ~ 1 reproduces the
+# reference's system-identified UR5 controller (kp 15775-16202, kd 281-577,
+# i.e. wn 63.7, zeta 1.15) and is stable at any timestep since kp*dt^2/M
+# reduces to (wn*dt)^2, independent of link inertia.
+ARM_OMEGA_N = 64.0
+ARM_ZETA = 1.15
+
+
+def _retune_arm_gains(spec: mujoco.MjSpec) -> None:
+  """Set arm position gains to (ARM_OMEGA_N, ARM_ZETA) using per-dof inertia."""
+  model = spec.compile()
+  for act in spec.actuators:
+    joint = model.joint(act.target)
+    inertia = model.dof_M0[joint.dofadr[0]]
+    kp = inertia * ARM_OMEGA_N**2
+    kd = 2.0 * ARM_ZETA * inertia * ARM_OMEGA_N
+    act.gainprm[0] = kp
+    act.biasprm[1] = -kp
+    act.biasprm[2] = -kd
+
+
 # Attach prefix for hand elements; avoids name clashes with the arm.
 HAND_PREFIX = "rh/"
 
@@ -42,6 +67,20 @@ def get_spec() -> mujoco.MjSpec:
   frame = arm.body("wrist_3_link").add_frame(pos=list(site.pos), quat=list(site.quat))
   arm.attach(child=hand, prefix=HAND_PREFIX, frame=frame)
 
+  _retune_arm_gains(arm)
+
+  # Reference default material friction (RaiSim setDefaultMaterial(0.8)). Makes
+  # hand-table and hand-object contacts 0.8 once the table drops its priority.
+  for geom in arm.geoms:
+    geom.friction[0] = ROBOT_FRICTION
+
+  # Gravity compensation on every robot body. Models the UR payload-aware
+  # controller; without it the relative-position action ratchets the arm down
+  # (~0.3 m/episode) because each step re-anchors on the sagged qpos.
+  for body in arm.bodies:
+    if body.name:
+      body.gravcomp = 1.0
+
   # Drop all keyframes; the init state is set by InitialStateCfg.
   for key in list(arm.keys):
     arm.delete(key)
@@ -53,10 +92,15 @@ def get_spec() -> mujoco.MjSpec:
 ##
 
 # Only the fingers are configured here; the arm keeps its menagerie XML actuators.
-FINGER_STIFFNESS = 1.0
-FINGER_DAMPING = 0.1
+# Grip torque saturates at kp * ACTION_SCALE_FINGER, so kp=1 capped it at
+# 0.015 Nm -- 47x below the reference Allegro's 0.7 Nm. Matching the reference's
+# kp=600 needs armature to carry it: reflected rotor inertia dominates a geared
+# finger, and without it kp*dt^2/M blows up (measured unstable above kp=67 at
+# armature=1e-4). kd is set for zeta ~ 1 at that armature.
+FINGER_STIFFNESS = 600.0
+FINGER_ARMATURE = 3e-2
+FINGER_DAMPING = 2.0 * (FINGER_STIFFNESS * FINGER_ARMATURE) ** 0.5
 FINGER_EFFORT_LIMIT = 1.0  # matches the hand XML actuatorfrcrange (+/-1 Nm).
-FINGER_ARMATURE = 1e-4  # stabilizes the stiff PD on the tiny finger inertias.
 
 # Match bare joint names: mjlab strips the attach prefix from entity-local names.
 HAND_ACTUATORS = (

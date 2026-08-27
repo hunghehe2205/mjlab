@@ -23,12 +23,24 @@ from mjlab.entity.variants import VariantEntityCfg
 OBJECTS_DIR = Path(__file__).parent
 ASSETS_DIR = OBJECTS_DIR / "assets"
 
-# Object mass used by the original RobustDexGrasp URDFs (uniform across objects).
+# Object mass used by the original RobustDexGrasp URDFs. Uniform except for five
+# objects whose URDFs carry a lighter identified mass; matching them matters
+# because scissors/small_block are ~3x lighter and are oversampled in training.
 OBJECT_MASS = 0.24875
+OBJECT_MASS_OVERRIDES = {
+  "scissors": 0.08626186684547055,
+  "small_block": 0.08340712944163264,
+  "large_clamp": 0.1695701014449372,
+  "off_water_body": 0.2049091757100137,
+  "extra_large_clamp": 0.2291035804273685,
+}
 # A tiny free-joint damping prevents MJWarp's explicit free-body angular dynamics
 # from gaining energy at high spin (notably for hammer/scissors at a 10 ms step).
 # At normal grasp speeds its time constant is long enough to be negligible.
 OBJECT_FREE_JOINT_DAMPING = 1e-5
+# Matches the table so their elementwise-max pair friction is the reference's
+# 0.2; against the 0.8 hand geoms the max still yields the reference's 0.8.
+OBJECT_FRICTION = 0.2
 OBJECT_RGBA = (0.85, 0.55, 0.25, 1.0)
 NUM_SURFACE_POINTS = 200
 
@@ -142,7 +154,8 @@ def get_mesh_object_spec(name: str, fixed: bool = False) -> mujoco.MjSpec:
   geom.name = "object_collision"
   geom.type = mujoco.mjtGeom.mjGEOM_MESH
   geom.meshname = "object_mesh"
-  geom.mass = OBJECT_MASS
+  geom.mass = OBJECT_MASS_OVERRIDES.get(name, OBJECT_MASS)
+  geom.friction[0] = OBJECT_FRICTION
   geom.material = "object"
   return spec
 

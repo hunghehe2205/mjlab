@@ -308,6 +308,12 @@ Chỉ ảnh hưởng metric giám sát, không đụng reward. **Với real: kh�
 
 ## 3. Nhóm B — Physics: object không nằm yên
 
+> **Đính chính (xem [06-experiment-report.md](06-experiment-report.md) §4).**
+> Giả thuyết "ma sát chưa hội tụ" ở mục này đã được đo và **bác bỏ**:
+> `iterations` 10→100 cho 0.99×, `impratio` 10→1 cho 1.00×. Nguyên nhân thật là
+> **timestep** (dt 10→5 ms cho 0.42×). Ngoài ra 06 phát hiện một bug lớn hơn
+> chưa có ở đây: **ratchet trọng lực** làm arm sụt 0.31 m/episode khi action=0.
+
 Robot đứng im hoàn toàn (action = 0), 70 bước / 14 s:
 
 | object | \|ω\| trung bình | \|ω\| max | trôi (m) |

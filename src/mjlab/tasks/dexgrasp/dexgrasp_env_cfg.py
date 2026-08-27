@@ -31,8 +31,10 @@ from mjlab.viewer import ViewerConfig
 
 TABLE_TOP_Z = 0.771
 ARM_MOUNT_Z = TABLE_TOP_Z - 0.04
-# Reference tabletop friction.
+# Reference friction: object-table pair is 0.2, every other pair is the 0.8
+# RaiSim default (hand-object, hand-table, hand-hand).
 TABLE_FRICTION = 0.2
+DEFAULT_FRICTION = 0.8
 
 # 1.2 m x 1.1 m table. Keep its near edge at y=-0.2 so it remains separated
 # from the pedestal while expanding the usable area away from the robot.
@@ -41,10 +43,10 @@ TABLE_CENTER = (0.0, -0.75, TABLE_TOP_Z / 2)
 PEDESTAL_HALF = (0.12, 0.12, ARM_MOUNT_Z / 2)
 PEDESTAL_CENTER = (0.0, 0.0, ARM_MOUNT_Z / 2)
 
-# Control: 5 Hz policy (control_dt 0.2 s = decimation 20 x timestep 0.01 s),
+# Control: 5 Hz policy (control_dt 0.2 s = decimation 40 x timestep 0.005 s),
 # 70-step episode (14 s).
-SIM_TIMESTEP = 0.01
-DECIMATION = 20
+SIM_TIMESTEP = 0.005
+DECIMATION = 40  # control_dt stays 0.2 s (5 Hz)
 EPISODE_LENGTH_S = 14.0
 
 _TABLE_RGBA = (0.55, 0.40, 0.28, 1.0)
@@ -57,8 +59,10 @@ def get_arena_spec() -> mujoco.MjSpec:
   spec.add_material(name="table", rgba=_TABLE_RGBA)
   spec.add_material(name="pedestal", rgba=_PEDESTAL_RGBA)
   body = spec.worldbody.add_body(name="arena")
-  # Priority makes the tabletop's contact properties apply consistently to
-  # every object mesh, rather than inheriting per-object defaults.
+  # No priority: MuJoCo combines equal-priority frictions with elementwise max.
+  # Table 0.2 + object 0.2 -> 0.2, while hand 0.8 -> max = 0.8. That reproduces
+  # the reference exactly (table-object 0.2, everything else the 0.8 default).
+  # With priority=1 the table forced 0.2 onto hand-table contacts too.
   body.add_geom(
     name="table",
     type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -66,7 +70,6 @@ def get_arena_spec() -> mujoco.MjSpec:
     pos=TABLE_CENTER,
     material="table",
     friction=[TABLE_FRICTION, 0.005, 0.0001],
-    priority=1,
   )
   body.add_geom(
     name="pedestal",
@@ -74,6 +77,7 @@ def get_arena_spec() -> mujoco.MjSpec:
     size=PEDESTAL_HALF,
     pos=PEDESTAL_CENTER,
     material="pedestal",
+    friction=[DEFAULT_FRICTION, 0.005, 0.0001],
   )
   return spec
 
@@ -202,13 +206,19 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
         timestep=SIM_TIMESTEP,
         iterations=10,
         ls_iterations=20,
-        impratio=10,
-        cone="elliptic",
+        impratio=1.0,
+        cone="pyramidal",
       ),
     ),
     decimation=DECIMATION,
     episode_length_s=EPISODE_LENGTH_S,
     scale_rewards_by_dt=False,  # Reference rewards are per control step.
-    reward_clip_min=-2.0,  # Reference total-reward floor.
-    termination_reward=-10.0,  # Applied after reward clipping.
+    # The reference computes a -2.0 floor but discards the result (train.py's
+    # `reward_r.clip(...)` return value is unused) and then overwrites the -10
+    # terminal with the raw sum, so neither ever reaches PPO. They are also
+    # actively harmful here: affordance_distance alone is -1.87 per step at the
+    # pre-grasp pose, leaving 0.13 of headroom before the floor flattens the
+    # gradient (22.9% of steps clipped under a random policy).
+    reward_clip_min=None,
+    termination_reward=0.0,
   )

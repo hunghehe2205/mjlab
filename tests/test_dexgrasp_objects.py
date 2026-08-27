@@ -34,7 +34,8 @@ def test_object_spec_compiles(name: str) -> None:
   assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object") >= 0
   assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "object_collision") >= 0
   bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
-  assert model.body_mass[bid] == pytest.approx(oc.OBJECT_MASS)
+  expected_mass = oc.OBJECT_MASS_OVERRIDES.get(name, oc.OBJECT_MASS)
+  assert model.body_mass[bid] == pytest.approx(expected_mass)
   np.testing.assert_allclose(model.dof_damping, oc.OBJECT_FREE_JOINT_DAMPING)
 
 

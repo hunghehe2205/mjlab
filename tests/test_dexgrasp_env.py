@@ -5,12 +5,16 @@ import warnings
 from contextlib import redirect_stderr, redirect_stdout
 
 import mujoco
+import numpy as np
 import pytest
 import torch
 
 import mjlab.tasks  # noqa: F401  (triggers task registration)
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
+from mjlab.asset_zoo.robots.ur5e_rh5dg2.ur5e_rh5dg2_constants import (
+  get_ur5e_rh5dg2_robot_cfg,
+)
 from mjlab.entity.variants import VariantEntityCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
 from mjlab.sensor import ContactSensorCfg
@@ -68,14 +72,24 @@ def test_table_contact_matches_reference_friction() -> None:
 
   assert model.geom_friction[table_id, 0] == pytest.approx(TABLE_FRICTION)
   assert TABLE_FRICTION == pytest.approx(0.2)
-  assert model.geom_priority[table_id] == 1
+  # No priority: the reference sets only the object-table pair to 0.2 and leaves
+  # every other pair at the 0.8 default, which MuJoCo's elementwise-max
+  # combination reproduces once the table stops overriding its partners.
+  assert model.geom_priority[table_id] == 0
+  robot_model = get_ur5e_rh5dg2_robot_cfg().spec_fn().compile()
+  np.testing.assert_allclose(robot_model.geom_friction[:, 0], rc.ROBOT_FRICTION)
+  obj_model = oc.get_mesh_object_spec("potted_meat_can").compile()
+  assert obj_model.geom_friction[0, 0] == pytest.approx(TABLE_FRICTION)
 
 
 def test_failure_semantics_are_explicit_in_training_config() -> None:
   cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
   params = cfg.terminations["hand_below_table"].params
 
-  assert cfg.termination_reward == pytest.approx(-10.0)
+  # The reference discards its own -2.0 clip and overwrites the -10 terminal, so
+  # neither reaches PPO; both are disabled here to match.
+  assert cfg.termination_reward == pytest.approx(0.0)
+  assert cfg.reward_clip_min is None
   assert params["tolerance"] == pytest.approx(HAND_TABLE_TERMINATION_TOLERANCE)
 
 
