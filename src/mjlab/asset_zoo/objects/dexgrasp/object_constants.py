@@ -23,9 +23,7 @@ from mjlab.entity.variants import VariantEntityCfg
 OBJECTS_DIR = Path(__file__).parent
 ASSETS_DIR = OBJECTS_DIR / "assets"
 
-# Object mass used by the original RobustDexGrasp URDFs. Uniform except for five
-# objects whose URDFs carry a lighter identified mass; matching them matters
-# because scissors/small_block are ~3x lighter and are oversampled in training.
+# RobustDexGrasp URDF mass, uniform except for five identified-lighter objects below.
 OBJECT_MASS = 0.24875
 OBJECT_MASS_OVERRIDES = {
   "scissors": 0.08626186684547055,
@@ -34,12 +32,9 @@ OBJECT_MASS_OVERRIDES = {
   "off_water_body": 0.2049091757100137,
   "extra_large_clamp": 0.2291035804273685,
 }
-# A tiny free-joint damping prevents MJWarp's explicit free-body angular dynamics
-# from gaining energy at high spin (notably for hammer/scissors at a 10 ms step).
-# At normal grasp speeds its time constant is long enough to be negligible.
+# Tiny damping avoids MJWarp energy gain at high spin (hammer/scissors).
 OBJECT_FREE_JOINT_DAMPING = 1e-5
-# Matches the table so their elementwise-max pair friction is the reference's
-# 0.2; against the 0.8 hand geoms the max still yields the reference's 0.8.
+# Matches table friction; elementwise-max pair friction is 0.2 vs table, 0.8 vs hand.
 OBJECT_FRICTION = 0.2
 OBJECT_RGBA = (0.85, 0.55, 0.25, 1.0)
 NUM_SURFACE_POINTS = 200
@@ -53,8 +48,7 @@ CYLINDER_HALF_HEIGHT = 0.05
 DEBUG_OBJECT_NAMES = ("box", "cylinder")
 ROBUST_DEXGRASP_BASELINE_NUM_ENVS = 88
 
-# Exact RobustDexGrasp ``new_training_set`` cohort. The original teacher
-# oversamples a few difficult objects; see ``baseline_assignment`` below.
+# Exact RobustDexGrasp new_training_set cohort; oversampling handled below.
 ROBUST_DEXGRASP_TRAIN_OBJECTS = (
   "master_chef_can",
   "cracker_box",

@@ -429,9 +429,15 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
       "tolerance": HAND_TABLE_TERMINATION_TOLERANCE,
     },
   )
+  # Truncation, not termination: the reference has no workspace bound at all and
+  # always runs the full 70 steps, so cutting the return here would add a
+  # negative bias it never had -- and this fires on ~35% of early episodes.
+  # Bootstrapping instead lets the critic learn the state is low-value on its
+  # own, while the reset still guards against unrecoverable off-table spin.
   cfg.terminations["object_out_of_workspace"] = TerminationTermCfg(
     func=mdp.object_out_of_workspace,
     params={"bounds": OBJECT_WORKSPACE_BOUNDS, "object_entity": "object"},
+    time_out=True,
   )
   cfg.terminations["nan"] = TerminationTermCfg(func=mdp.nan_detection)
   arm_links = SceneEntityCfg(

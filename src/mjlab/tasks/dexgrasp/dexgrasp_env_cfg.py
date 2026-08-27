@@ -24,27 +24,22 @@ from mjlab.tasks.dexgrasp import mdp
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.viewer import ViewerConfig
 
-##
-# Scene geometry (world frame). The arm base sits 4 cm below the tabletop so
-# the wrist/hand are visually centred at the table height in the pre-grasp view.
-##
+# Scene geometry (world frame); arm base sits 4 cm below tabletop for a
+# pre-grasp view centred at table height.
 
 TABLE_TOP_Z = 0.771
 ARM_MOUNT_Z = TABLE_TOP_Z - 0.04
-# Reference friction: object-table pair is 0.2, every other pair is the 0.8
-# RaiSim default (hand-object, hand-table, hand-hand).
+# Reference friction: object-table pair is 0.2, every other pair the 0.8 default.
 TABLE_FRICTION = 0.2
 DEFAULT_FRICTION = 0.8
 
-# 1.2 m x 1.1 m table. Keep its near edge at y=-0.2 so it remains separated
-# from the pedestal while expanding the usable area away from the robot.
+# 1.2m x 1.1m table; near edge at y=-0.2 keeps it clear of the pedestal.
 TABLE_HALF = (0.60, 0.55, TABLE_TOP_Z / 2)
 TABLE_CENTER = (0.0, -0.75, TABLE_TOP_Z / 2)
 PEDESTAL_HALF = (0.12, 0.12, ARM_MOUNT_Z / 2)
 PEDESTAL_CENTER = (0.0, 0.0, ARM_MOUNT_Z / 2)
 
-# Control: 5 Hz policy (control_dt 0.2 s = decimation 40 x timestep 0.005 s),
-# 70-step episode (14 s).
+# Control: 5 Hz policy (decimation 40 x timestep 0.005s), 70-step episode (14s).
 SIM_TIMESTEP = 0.005
 DECIMATION = 40  # control_dt stays 0.2 s (5 Hz)
 EPISODE_LENGTH_S = 14.0
@@ -54,15 +49,17 @@ _PEDESTAL_RGBA = (0.30, 0.30, 0.32, 1.0)
 
 
 def get_arena_spec() -> mujoco.MjSpec:
-  """Static table + arm pedestal as one fixed body (auto-wrapped mocap)."""
+  """Static table + arm pedestal as one fixed body (auto-wrapped mocap).
+
+  No friction priority is set: MuJoCo combines equal-priority frictions via
+  elementwise max, so table 0.2 + object 0.2 -> 0.2 while hand 0.8 -> 0.8,
+  matching the reference exactly. Priority=1 would leak the table's 0.2 onto
+  hand-table contacts too.
+  """
   spec = mujoco.MjSpec()
   spec.add_material(name="table", rgba=_TABLE_RGBA)
   spec.add_material(name="pedestal", rgba=_PEDESTAL_RGBA)
   body = spec.worldbody.add_body(name="arena")
-  # No priority: MuJoCo combines equal-priority frictions with elementwise max.
-  # Table 0.2 + object 0.2 -> 0.2, while hand 0.8 -> max = 0.8. That reproduces
-  # the reference exactly (table-object 0.2, everything else the 0.8 default).
-  # With priority=1 the table forced 0.2 onto hand-table contacts too.
   body.add_geom(
     name="table",
     type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -83,6 +80,15 @@ def get_arena_spec() -> mujoco.MjSpec:
 
 
 def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
+  """Build the robot-agnostic teacher env config.
+
+  ``reward_clip_min`` is left unset: the reference computes a -2.0 floor but
+  discards it (train.py's ``reward_r.clip(...)`` return value is unused) and
+  overwrites the -10 terminal with the raw sum, so neither reaches PPO. Both
+  would be actively harmful here too -- affordance_distance alone is -1.87
+  per step at the pre-grasp pose, leaving only 0.13 of headroom before the
+  floor flattens the gradient (22.9% of steps clipped under a random policy).
+  """
   actor_terms = {
     "joint_pos": ObservationTermCfg(
       func=mdp.joint_pos,
@@ -120,8 +126,7 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       },
     ),
   }
-  # Teacher obs are privileged and clean; corruption is a no-op without noise.
-  # The runner maps both actor and critic to this group, matching the reference.
+  # Privileged, clean teacher obs; runner maps both actor and critic to this group.
   observations = {
     "actor": ObservationGroupCfg(actor_terms, enable_corruption=True),
   }
@@ -131,8 +136,7 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       entity_name="robot",
       actuator_names=(".*",),
       scale=1.0,  # Override per-robot (arm 0.005 / finger 0.015).
-      # Clamp the absolute target to soft joint limits (fingers have no actuator
-      # ctrlrange to bound them; the delta itself stays unclipped -- see §D).
+      # Clamp target to soft limits (no finger ctrlrange); delta unclipped, see §D.
       clip_to_joint_limits=True,
       first_substep_delay_prob=0.5,
     )
@@ -198,8 +202,7 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       azimuth=140.0,
     ),
     sim=SimulationCfg(
-      # Headroom for a multi-finger grasp (lift_cube's 2-finger scene uses
-      # 55/600); revisit once §H measures peak contacts.
+      # Headroom for multi-finger grasp (cf. lift_cube's 55/600); revisit after §H.
       nconmax=150,
       njmax=1500,
       mujoco=MujocoCfg(
@@ -213,12 +216,6 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
     decimation=DECIMATION,
     episode_length_s=EPISODE_LENGTH_S,
     scale_rewards_by_dt=False,  # Reference rewards are per control step.
-    # The reference computes a -2.0 floor but discards the result (train.py's
-    # `reward_r.clip(...)` return value is unused) and then overwrites the -10
-    # terminal with the raw sum, so neither ever reaches PPO. They are also
-    # actively harmful here: affordance_distance alone is -1.87 per step at the
-    # pre-grasp pose, leaving 0.13 of headroom before the floor flattens the
-    # gradient (22.9% of steps clipped under a random policy).
-    reward_clip_min=None,
+    reward_clip_min=None,  # See docstring: reference's floor/terminal are no-ops.
     termination_reward=0.0,
   )

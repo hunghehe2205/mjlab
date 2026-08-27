@@ -39,9 +39,7 @@ __all__ = [
   "AffordanceVectors",
 ]
 
-# Reference impulse thresholds (N*s): contributions below SKIP_IMPULSE are
-# dropped and a body flags as in-contact above FLAG_IMPULSE. The reference
-# reads the impulse of one 10 ms sim step; sensor_impulse matches that scale.
+# Impulse thresholds (N*s): drop below SKIP_IMPULSE, flag contact above FLAG_IMPULSE.
 SKIP_IMPULSE = 0.001
 FLAG_IMPULSE = 0.01
 
@@ -138,8 +136,7 @@ class HandObjectContacts:
     del env, kwargs
     impulse = sensor_impulse(self._sensor, self._dt, self._pad_parents)
     magnitude = impulse.norm(dim=-1)
-    # The reference drops per-contact impulses below SKIP_IMPULSE before
-    # accumulating; netforce sums first, so floor the accumulated magnitude.
+    # Reference drops per-contact impulses below SKIP_IMPULSE; floor the sum too.
     magnitude = torch.where(
       magnitude < SKIP_IMPULSE, torch.zeros_like(magnitude), magnitude
     )

@@ -60,8 +60,7 @@ def sample_object(mesh: trimesh.Trimesh, num_points: int = NUM_SURFACE_POINTS) -
 
 def precompute_object(name: str) -> None:
   obj = PHASE1_OBJECTS[name]
-  # Sample the convex hull: MuJoCo collides against the hull, so the affordance
-  # cloud must lie on the surface the fingers actually contact.
+  # Sample the convex hull: MuJoCo collides on the hull, so affordance points must too.
   data = sample_object(get_object_trimesh(name).convex_hull)
   lowest = obj.lowest_point
   (ASSETS_DIR / name / "lowest_point.txt").write_text(f"{lowest:.6f}\n")

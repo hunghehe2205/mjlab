@@ -43,8 +43,7 @@ class ResetGraspPose:
     self._probe = ArmHandSelfCollisionProbe()
     if not self._probe.is_valid_pregrasp(self._seed):
       raise ValueError("UR5e RH5-DG2 home arm pose is not a valid pre-grasp.")
-    # Seed from mjlab's global numpy RNG (seed_rng'd from the resolved env seed)
-    # rather than raw cfg.seed, which is None -> OS entropy when unset.
+    # Seed from mjlab's global numpy RNG, not raw cfg.seed (None -> OS entropy when unset).
     self._rng = np.random.default_rng(int(np.random.randint(0, 2**31 - 1)))
     robot = env.scene["robot"]
     self._arm_ids = [robot.joint_names.index(n) for n in rc.ARM_JOINT_NAMES]
