@@ -37,6 +37,7 @@ __all__ = [
   "TableLogBarrier",
   "ArmHeightLogBarrier",
   "ContactReward",
+  "EnclosureGatedContact",
   "ArmCollision",
   "ObjectDisplacement",
   "object_velocity",
@@ -49,8 +50,11 @@ __all__ = [
 # cfg_reg.yaml environment.reward coefficients (baseline).
 REWARD_COEFFS = {
   "affordance_distance": 0.5,
+  # Contact/impulse are enclosure-gated (thumb + >=2 fingers): they fire only on
+  # a wrapping grip, not palm/single-finger farming. Impulse halved so squeeze
+  # stops dominating the shaped reward once gated.
   "affordance_contact": 1.5,
-  "affordance_impulse": 1.0,
+  "affordance_impulse": 0.5,
   "table_logbarrier": -0.03,
   "table_contact": -1.0,
   "table_impulse": -0.5,
@@ -221,12 +225,15 @@ class ContactReward:
       else None
     )
 
-  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
-    del env, kwargs
+  def _impulse(self) -> torch.Tensor:
+    """Summed per-body impulse [E, B, 3] across the term's sensors."""
     impulses = [
       sensor_impulse(sensor, self._dt, self._pad_parents) for sensor in self._sensors
     ]
-    impulse = torch.stack(impulses).sum(dim=0)
+    return torch.stack(impulses).sum(dim=0)
+
+  def _reduce(self, impulse: torch.Tensor) -> torch.Tensor:
+    """Mode-specific reduction of a per-body impulse to a per-env scalar."""
     if self._mode == "flags":
       value = (impulse.norm(dim=-1) > FLAG_IMPULSE).float()
     elif self._mode == "impulse_xy":
@@ -238,6 +245,35 @@ class ContactReward:
     if self._weights is not None:
       return (value * self._weights).sum(dim=-1) / self._divisor
     return value.norm(dim=-1)
+
+  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
+    del env, kwargs
+    return self._reduce(self._impulse())
+
+
+class EnclosureGatedContact(ContactReward):
+  """ContactReward gated on an opposition grip.
+
+  Zero unless the thumb tip and at least ``min_fingers`` non-thumb fingertips
+  are in contact, so palm-only or single-finger presses score nothing -- only a
+  wrapping (force-closure) grip is rewarded.
+  """
+
+  def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
+    super().__init__(cfg, env)
+    self._thumb_tip = int(cfg.params["thumb_tip_index"])
+    self._finger_tips = list(cfg.params["finger_tip_indices"])
+    self._min_fingers = int(cfg.params.get("min_fingers", 2))
+
+  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
+    del env, kwargs
+    impulse = self._impulse()
+    value = self._reduce(impulse)
+    flags = impulse.norm(dim=-1) > FLAG_IMPULSE
+    thumb = flags[:, self._thumb_tip]
+    fingers = flags[:, self._finger_tips].sum(dim=-1)
+    gate = (thumb & (fingers >= self._min_fingers)).float()
+    return value * gate
 
 
 class ArmCollision:

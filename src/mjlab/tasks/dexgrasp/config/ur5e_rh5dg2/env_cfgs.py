@@ -225,6 +225,15 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
     0,
   ).tolist()
   clip_high = get_contact_clip_high()
+  # Enclosure gate: thumb tip + >=2 non-thumb fingertips must be in contact.
+  finger_tips = tuple(
+    i for i in rc.CONTACT_TIP_INDICES if i != rc.CONTACT_THUMB_TIP_INDEX
+  )
+  gate_params = {
+    "thumb_tip_index": rc.CONTACT_THUMB_TIP_INDEX,
+    "finger_tip_indices": finger_tips,
+    "min_fingers": 2,
+  }
   return {
     "affordance_distance": RewardTermCfg(
       func=mdp.AffordanceDistance,
@@ -247,7 +256,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
       params={"asset_cfg": arm_links, "table_top_z": TABLE_TOP_Z},
     ),
     "affordance_contact": RewardTermCfg(
-      func=mdp.ContactReward,
+      func=mdp.EnclosureGatedContact,
       weight=REWARD_COEFFS["affordance_contact"],
       params={
         "sensor_name": "hand_object_contact",
@@ -255,10 +264,11 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
         "mode": "flags",
         "divisor": 16.0,
         "weights": con_weights,
+        **gate_params,
       },
     ),
     "affordance_impulse": RewardTermCfg(
-      func=mdp.ContactReward,
+      func=mdp.EnclosureGatedContact,
       weight=REWARD_COEFFS["affordance_impulse"],
       params={
         "sensor_name": "hand_object_contact",
@@ -266,6 +276,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
         "mode": "impulse_xy",
         "clip_high": clip_high,
         "weights": con_weights,
+        **gate_params,
       },
     ),
     "table_contact": RewardTermCfg(
