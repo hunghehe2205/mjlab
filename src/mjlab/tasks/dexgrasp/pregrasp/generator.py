@@ -24,12 +24,12 @@ from mjlab.tasks.dexgrasp.pregrasp.visibility import visible_points
 # Fixed camera in the env frame (RobustDexGrasp cfg_reg.yaml value).
 CAMERA_POSITION = np.array([0.035, -0.58, 1.531])
 # Grasp-center standoff from the visible-surface centre along the camera ray.
-# The reference's 0.25 is for the Allegro palm centre; this hand's grasp_center
-# sits ~0.10 m behind the fingertips, so 0.25 left the nearest tip 0.14-0.18 m
-# from the object and burned ~30 of 70 steps on the approach. Measured on the
-# Phase 1 objects (60 resets): nearest tip = d - 0.10; 0.13 gives 3-7 cm with
-# no reset contact, matching the ~2 cm standoff of the RaiSim RH5-DG2 variant.
-APPROACH_DISTANCE = 0.13
+# The reference's 0.25 is for the Allegro palm centre; grasp_center here sits
+# ~2 cm behind the fingertips (thumb no longer ahead of them, see
+# INIT_FINGER_POSE). Measured over all 35 objects (140 resets): 0.10 puts the
+# nearest tip at 3.0 cm min / 7.9 cm mean with no reset contact; 0.08 already
+# touches on 1% of resets.
+APPROACH_DISTANCE = 0.10
 NUM_ROLL_SAMPLES = 10
 PROJ_LIMIT = 0.18  # gripper-axis object width below which a grasp is "narrow"
 LENGTH_COEFF = 5.0

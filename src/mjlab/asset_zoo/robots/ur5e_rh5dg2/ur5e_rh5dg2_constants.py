@@ -261,9 +261,12 @@ ACTION_SCALE_ARM = 0.005
 ACTION_SCALE_FINGER = 0.015
 
 # Pre-grasp finger pose (cupped, thumb opposed); first estimate, refine in viewer.
+# Thumb matches the RaiSim RH5-DG2 variant. At yaw 1.2 the thumb tip sat 4 cm
+# ahead of the other tips on the approach ray and touched first in every
+# episode; model_50 took 80% of its contact reward from the thumb alone.
 INIT_FINGER_POSE = {
-  "R_thumb_yaw_joint": 1.2,
-  "R_thumb_mcp_joint": 0.3,
+  "R_thumb_yaw_joint": 0.3,
+  "R_thumb_mcp_joint": 0.2,
   "R_thumb_pip_joint": 0.3,
   "R_thumb_dip_joint": 0.2,
   "R_index_yaw_joint": 0.0,

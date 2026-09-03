@@ -51,3 +51,19 @@ lệch bản RaiSim (0.3), cần xem viewer; coeff obj_vel/qvel/disp mềm hơn 
 1024 env, 4 minibatch (17.9k mẫu/minibatch, 16 update/iteration như gốc), LR cố định.
 Ước tính ~26 s/iteration trên 4060 Ti. Cổng: `affordance_contact` tăng đơn điệu,
 `object_angular_velocity` không còn là term phạt lớn nhất, LR không chạm biên.
+
+## 5. Run 4gd2kunn (1024 env, RTX 3060, a06258f): ngón cái chạm "miễn phí"
+
+Contact tăng đơn điệu 0 → 1.54 trong 28 iter (gấp 10 run tốt nhất cũ), ~28 s/iter.
+Nhưng rollout `model_50.pt` (64 env, potted_meat_can) cho thấy policy khai thác pose
+ngón cái: thumb yaw 1.2 đưa đầu ngón cái ra trước các ngón khác 4 cm trên tia tiếp
+cận; ngón cái chạm ở bước ~5 trong 100% episode, các ngón khác bước 15–18;
+78–81% contact reward đến từ ngón cái (trọng số thumb dip = 12/36). Thumb yaw không
+đổi cả episode, các ngón khác gần như không gập. Quét standoff tại reset
+(potted_meat_can, 64 env): yaw 1.2 chạm từ d = 0.08 (chỉ ngón cái, 0.37–0.44
+reward/bước không cần gập ngón); yaw 0.3 (bản RaiSim của mình) không chạm tới
+d = 0.02, các đầu ngón ngang nhau.
+
+Fix: `INIT_FINGER_POSE` thumb yaw 0.3, mcp 0.2 (đúng bản RaiSim); vì ngón cái không
+còn nhô ra, `APPROACH_DISTANCE` 0.13 → 0.10 (35 vật, 140 reset: min 3.0 cm, mean
+7.9 cm, 0 chạm). Run lại từ đầu.
