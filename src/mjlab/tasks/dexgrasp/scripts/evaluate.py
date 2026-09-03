@@ -105,24 +105,28 @@ def run_object_evaluation(
   reachable = torch.as_tensor(reachable_np, device=device)
 
   # Fingers stay under policy control through the lift (the reference keeps
-  # squeezing); only the arm is scripted, ramping toward the raised target.
+  # squeezing); only the arm is scripted. The arm target is the interpolated
+  # pose itself, as in the reference, not a rate-limited step toward it: a
+  # +-1 action cap (0.005 rad/step) could not cover a 0.4 rad lift in time.
   with torch.no_grad():
     for step in range(1, cfg.lift_steps + 1):
       alpha = step / cfg.lift_steps
       desired = torch.lerp(initial_arm_t, target_arm_t, alpha)
       current = robot.data.joint_pos[:, arm_ids]
       actions = policy(obs).clone()
-      actions[:, :n_arm] = ((desired - current) / rc.ACTION_SCALE_ARM).clamp(-1.0, 1.0)
+      actions[:, :n_arm] = (desired - current) / rc.ACTION_SCALE_ARM
       obs, _, _, _ = vec_env.step(actions)
 
   # Final height, not peak: a transient bounce must not count as a hold.
   final_gain = obj.data.root_link_pos_w[:, 2] - initial_object_z
+  track_err = (robot.data.joint_pos[:, arm_ids] - target_arm_t).abs().amax(dim=1)
   success = reachable & (final_gain > cfg.success_height)
   vec_env.close()
   return {
     "success": float(success.float().mean()),
     "reachable": float(reachable.float().mean()),
     "mean_gain": float(final_gain[reachable].mean()) if reachable.any() else 0.0,
+    "track_err": float(track_err[reachable].mean()) if reachable.any() else 0.0,
   }
 
 
@@ -157,7 +161,8 @@ def run_evaluate(cfg: EvaluateConfig) -> dict[str, float]:
   for name, d in sorted(details.items(), key=lambda kv: kv[1]["success"]):
     print(
       f"{name:<22} success {d['success']:5.1%}  "
-      f"reachable {d['reachable']:5.1%}  mean_gain {d['mean_gain']:+.3f} m"
+      f"reachable {d['reachable']:5.1%}  mean_gain {d['mean_gain']:+.3f} m  "
+      f"track_err {d['track_err']:.3f} rad"
     )
   overall = sum(metrics.values()) / len(metrics)
   print(f"{'OVERALL':<22} success {overall:5.1%}")

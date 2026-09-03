@@ -42,6 +42,9 @@ __all__ = [
 # Impulse thresholds (N*s): drop below SKIP_IMPULSE, flag contact above FLAG_IMPULSE.
 SKIP_IMPULSE = 0.001
 FLAG_IMPULSE = 0.01
+# Reference impulse window: RaiSim reports the impulse of one 10 ms sim step. The
+# thresholds above are tuned to that scale, so it must not follow SIM_TIMESTEP.
+REFERENCE_IMPULSE_DT = 0.01
 
 _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
 
@@ -51,13 +54,13 @@ def sensor_impulse(
   dt: float,
   pad_parents: tuple[int, ...] | None = None,
 ) -> torch.Tensor:
-  """Per-substep mean impulse vectors (B, P, 3), on the reference scale.
+  """Mean net force over the control step x ``dt`` (B, P, 3).
 
-  The reference reads one sim step's contact impulse after the substep loop;
-  averaging the net-force history over the control step's substeps and
-  scaling by the timestep reproduces that scale. With ``pad_parents``, the
-  trailing pad slots are vector-summed into their parent body slots (the
-  reference merges welded pad links into the parent body).
+  The reference reads one 10 ms sim step's contact impulse after the substep
+  loop; averaging the net-force history over the substeps and scaling by
+  ``dt = REFERENCE_IMPULSE_DT`` reproduces that scale regardless of the sim
+  timestep. With ``pad_parents``, the trailing pad slots are vector-summed into
+  their parent body slots (the reference merges welded pad links).
   """
   history = sensor.data.force_history
   assert history is not None
@@ -129,7 +132,7 @@ class HandObjectContacts:
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
     sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
     self._sensor = sensor
-    self._dt = float(env.sim.cfg.mujoco.timestep)
+    self._dt = REFERENCE_IMPULSE_DT
     self._pad_parents = cfg.params.get("pad_parent_indices")
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:

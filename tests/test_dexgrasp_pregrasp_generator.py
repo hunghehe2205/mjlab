@@ -1,7 +1,8 @@
 """End-to-end pre-grasp generation on a real Phase 1 object.
 
 Exercises visibility -> palm-roll sampling -> IK -> scoring together and checks
-the chosen grasp-center sits ~0.25 m in front of the object toward the camera.
+the chosen grasp-center sits APPROACH_DISTANCE in front of the object toward
+the camera.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import trimesh
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
 from mjlab.tasks.dexgrasp.pregrasp.generator import (
+  APPROACH_DISTANCE,
   CAMERA_POSITION,
   _wrist_penalty,
   fallback_arm_qpos,
@@ -50,7 +52,10 @@ def test_generate_pregrasp_places_grasp_center_toward_camera():
     gc = kin.fk_grasp_center_env(q)[:3, 3]
     obj_to_cam = np.linalg.norm(pose[:3] - CAMERA_POSITION)
     assert np.linalg.norm(gc - CAMERA_POSITION) < obj_to_cam
-    assert 0.1 < np.linalg.norm(gc - pose[:3]) < 0.45
+    # Root-to-centre offset adds up to ~0.1 m on top of the standoff.
+    assert (
+      APPROACH_DISTANCE - 0.05 < np.linalg.norm(gc - pose[:3]) < APPROACH_DISTANCE + 0.2
+    )
   assert ok >= 10
 
 

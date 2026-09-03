@@ -21,6 +21,7 @@ from mjlab.sensor import ContactSensor
 from mjlab.tasks.dexgrasp.mdp.metrics import object_root_pos_state
 from mjlab.tasks.dexgrasp.mdp.observations import (
   FLAG_IMPULSE,
+  REFERENCE_IMPULSE_DT,
   keypoint_min_distances,
   sensor_impulse,
 )
@@ -204,7 +205,7 @@ class ContactReward:
     self._sensors: tuple[ContactSensor, ...] = tuple(
       env.scene[name] for name in sensor_names
     )
-    self._dt = float(env.sim.cfg.mujoco.timestep)
+    self._dt = REFERENCE_IMPULSE_DT
     self._pad_parents = cfg.params.get("pad_parent_indices")
     self._mode = cfg.params["mode"]
     self._divisor = float(cfg.params.get("divisor", 1.0))

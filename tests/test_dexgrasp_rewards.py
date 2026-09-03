@@ -120,6 +120,27 @@ def test_sensor_impulse_reference_scale_and_pad_fold() -> None:
   )
 
 
+def test_contact_reward_impulse_scale_ignores_sim_timestep() -> None:
+  # 1 N over the whole step is 0.01 N*s on the reference (10 ms) scale, whether
+  # the sim runs at 5 ms or 10 ms; a timestep-following scale halved it at 5 ms.
+  history = torch.zeros((1, 1, 4, 3))
+  history[..., 0] = 1.0
+  sensor = SimpleNamespace(data=SimpleNamespace(force_history=history))
+  cfg = SimpleNamespace(params={"sensor_name": "hand", "mode": "impulse"})
+  for timestep in (0.005, 0.01):
+    env = cast(
+      ManagerBasedRlEnv,
+      SimpleNamespace(
+        scene={"hand": sensor},
+        sim=SimpleNamespace(
+          cfg=SimpleNamespace(mujoco=SimpleNamespace(timestep=timestep))
+        ),
+        device="cpu",
+      ),
+    )
+    torch.testing.assert_close(ContactReward(cfg, env)(env), torch.tensor([0.01]))
+
+
 def test_contact_reward_pad_contact_fires_parent_flag() -> None:
   # Force only on the pad slot must flag the parent contact body.
   history = torch.zeros((1, 3, 1, 3))

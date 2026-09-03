@@ -286,9 +286,11 @@ INIT_FINGER_POSE = {
 # Final config.
 ##
 
+# 1.0: the action target clamps to the full URDF range like the reference; 0.9
+# silently cut ~10% of finger travel at each end.
 ARTICULATION = EntityArticulationInfoCfg(
   actuators=ARM_ACTUATORS + HAND_ACTUATORS,
-  soft_joint_pos_limit_factor=0.9,
+  soft_joint_pos_limit_factor=1.0,
 )
 
 

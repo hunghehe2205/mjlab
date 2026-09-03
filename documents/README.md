@@ -14,6 +14,7 @@ Port phương pháp [RobustDexGrasp](https://github.com/zdchan/RobustDexGrasp)
 | [05-audit-fixes.md](05-audit-fixes.md) | Audit đối chiếu bản gốc: bug, khác biệt, rủi ro sim2real + thứ tự sửa |
 | [06-experiment-report.md](06-experiment-report.md) | Thực nghiệm sau fix: eval 0%, ratchet trọng lực, quét solver (đính chính 05 §3) |
 | [07-control-authority.md](07-control-authority.md) | Khôi phục quyền điều khiển: gravcomp, gains ω_n/ζ, lực kẹp, bỏ clip, friction/mass |
+| [08-log-audit-fixes.md](08-log-audit-fixes.md) | Đối chiếu thông số với bản gốc, đọc log wandb 8 run, fix: thang impulse, standoff 0.13, soft limit, minibatch/LR, eval clamp |
 
 ## Trạng thái
 
