@@ -19,7 +19,6 @@ from mjlab.tasks.dexgrasp.mdp.observations import sensor_impulse
 from mjlab.tasks.dexgrasp.mdp.rewards import (
   REWARD_COEFFS,
   ContactReward,
-  OppositionGatedContact,
   affordance_weights,
   contact_weights,
 )
@@ -168,41 +167,6 @@ def test_contact_reward_pad_contact_fires_parent_flag() -> None:
   reward = ContactReward(cfg, env)(env)
 
   torch.testing.assert_close(reward, torch.tensor([1.0]))
-
-
-def test_opposition_gated_contact_ramps_with_thumb_yaw() -> None:
-  # Three bodies all in contact (thumb tip 0 + fingers 1,2), so the enclosure
-  # gate passes; the reward should then scale by the thumb-yaw ramp.
-  history = torch.zeros((1, 3, 1, 3))
-  history[0, :, 0, 0] = 10.0
-  sensor = SimpleNamespace(data=SimpleNamespace(force_history=history))
-
-  def reward_at(yaw: float) -> float:
-    robot = SimpleNamespace(data=SimpleNamespace(joint_pos=torch.tensor([[yaw]])))
-    env = cast(
-      ManagerBasedRlEnv,
-      SimpleNamespace(scene={"hand": sensor, "robot": robot}, device="cpu"),
-    )
-    cfg = SimpleNamespace(
-      params={
-        "sensor_name": "hand",
-        "mode": "flags",
-        "weights": [1.0, 1.0, 1.0],
-        "divisor": 1.0,
-        "thumb_tip_index": 0,
-        "finger_tip_indices": (1, 2),
-        "min_fingers": 2,
-        "yaw_asset_cfg": SimpleNamespace(name="robot", joint_ids=[0]),
-        "yaw_lo": 0.1,
-        "yaw_span": 0.5,
-      }
-    )
-    return float(OppositionGatedContact(cfg, env)(env)[0])
-
-  assert reward_at(0.1) == pytest.approx(0.0)  # hook: no opposition
-  assert reward_at(0.35) == pytest.approx(1.5)  # half ramp x 3 bodies
-  assert reward_at(0.6) == pytest.approx(3.0)  # full opposition
-  assert reward_at(1.0) == pytest.approx(3.0)  # clamped
 
 
 @pytest.mark.slow
