@@ -38,6 +38,7 @@ __all__ = [
   "ArmHeightLogBarrier",
   "ContactReward",
   "EnclosureGatedContact",
+  "OppositionGatedContact",
   "ArmCollision",
   "ObjectDisplacement",
   "object_velocity",
@@ -274,6 +275,31 @@ class EnclosureGatedContact(ContactReward):
     fingers = flags[:, self._finger_tips].sum(dim=-1)
     gate = (thumb & (fingers >= self._min_fingers)).float()
     return value * gate
+
+
+class OppositionGatedContact(EnclosureGatedContact):
+  """EnclosureGatedContact scaled by a thumb-opposition ramp.
+
+  Multiplies the gated reward by clamp((thumb_yaw - lo) / span, 0, 1): a
+  low-opposition "hook" (thumb alongside the fingers) earns near nothing while a
+  fully opposed thumb earns the whole reward -- biasing toward force closure
+  without forbidding the pose. Both grasp types otherwise saturate contact and
+  impulse identically, so this is the term that separates them.
+  """
+
+  def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
+    super().__init__(cfg, env)
+    asset_cfg = cfg.params["yaw_asset_cfg"]
+    self._yaw_robot = env.scene[asset_cfg.name]
+    self._yaw_ids = asset_cfg.joint_ids
+    self._yaw_lo = float(cfg.params.get("yaw_lo", 0.1))
+    self._yaw_span = float(cfg.params.get("yaw_span", 0.5))
+
+  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
+    gated = super().__call__(env, **kwargs)
+    yaw = self._yaw_robot.data.joint_pos[:, self._yaw_ids].mean(dim=-1)
+    ramp = ((yaw - self._yaw_lo) / self._yaw_span).clamp(0.0, 1.0)
+    return gated * ramp
 
 
 class ArmCollision:

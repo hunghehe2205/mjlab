@@ -234,6 +234,13 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
     "finger_tip_indices": finger_tips,
     "min_fingers": 2,
   }
+  # Opposition ramp: hook (thumb yaw ~0.1) -> 0, opposed (~0.6+) -> full reward.
+  opp_params = {
+    **gate_params,
+    "yaw_asset_cfg": SceneEntityCfg("robot", joint_names=(rc.THUMB_YAW_JOINT,)),
+    "yaw_lo": 0.1,
+    "yaw_span": 0.5,
+  }
   return {
     "affordance_distance": RewardTermCfg(
       func=mdp.AffordanceDistance,
@@ -256,7 +263,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
       params={"asset_cfg": arm_links, "table_top_z": TABLE_TOP_Z},
     ),
     "affordance_contact": RewardTermCfg(
-      func=mdp.EnclosureGatedContact,
+      func=mdp.OppositionGatedContact,
       weight=REWARD_COEFFS["affordance_contact"],
       params={
         "sensor_name": "hand_object_contact",
@@ -264,11 +271,11 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
         "mode": "flags",
         "divisor": 16.0,
         "weights": con_weights,
-        **gate_params,
+        **opp_params,
       },
     ),
     "affordance_impulse": RewardTermCfg(
-      func=mdp.EnclosureGatedContact,
+      func=mdp.OppositionGatedContact,
       weight=REWARD_COEFFS["affordance_impulse"],
       params={
         "sensor_name": "hand_object_contact",
@@ -276,7 +283,7 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
         "mode": "impulse_xy",
         "clip_high": clip_high,
         "weights": con_weights,
-        **gate_params,
+        **opp_params,
       },
     ),
     "table_contact": RewardTermCfg(
