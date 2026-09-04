@@ -10,14 +10,15 @@ from mjlab.rl import (
 
 
 def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
-  # Obs normalization is not in the reference. Raw obs std spans 0.02 (af_vec)
-  # to 1.0 (joint_pos) and the critic's value loss sat at 40-700 for 1600
-  # iterations without it (documents/08 §6).
+  # Raw obs, no normalization -- matches the reference (normalize_ob=False; d/af_vec
+  # fed raw). EmpiricalNormalization divides af_vec (std ~0.02) by ~0.03, amplifying
+  # it ~33x so its noise dominates the input and contact never bootstraps (0% at
+  # iter 100 vs 8yelo0qc 0.68). Value-loss noise is tolerated, as in the reference.
   return RslRlOnPolicyRunnerCfg(
     actor=RslRlModelCfg(
       hidden_dims=(128, 128),
       activation="lrelu",
-      obs_normalization=True,
+      obs_normalization=False,
       distribution_cfg={
         "class_name": "GaussianDistribution",
         "init_std": 1.0,
@@ -28,7 +29,7 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
     critic=RslRlModelCfg(
       hidden_dims=(128, 128),
       activation="lrelu",
-      obs_normalization=True,
+      obs_normalization=False,
     ),
     algorithm=RslRlPpoAlgorithmCfg(
       value_loss_coef=0.5,
