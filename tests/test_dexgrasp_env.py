@@ -109,8 +109,8 @@ def test_reference_training_randomization_and_policy_config() -> None:
   assert eval_cfg.events["reset_grasp_pose"].params["non_uniform_sampling"] is False
   assert runner.actor.activation == "lrelu"
   assert runner.critic.activation == "lrelu"
-  assert runner.actor.obs_normalization is False
-  assert runner.critic.obs_normalization is False
+  assert runner.actor.obs_normalization is True
+  assert runner.critic.obs_normalization is True
   assert tuple(cfg.observations) == ("actor",)
   assert runner.obs_groups["critic"] == ("actor",)
   distribution_cfg = runner.actor.distribution_cfg

@@ -136,7 +136,7 @@ problems/phase1-rewards-notes.md).
 ## H. RL config & train
 
 - [x] `RslRlOnPolicyRunnerCfg`: MLP 128×128, γ=0.996, λ=0.95, 4 epochs, 4
-  minibatches, obs normalization, min action std 0.2.
+  minibatches, min action std 0.2; obs normalization bật (gốc không, 08 §6).
 - [ ] Smoke train (~vài trăm iter, ít env): reward tăng, không NaN, contact
   xuất hiện.
 - [ ] Train đầy đủ + đánh giá: tune PD gains ngón / ngưỡng contact nếu grasp

@@ -399,8 +399,37 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
     "robot", body_names=rc.KEYPOINT_BODIES, preserve_order=True
   )
   if not play:
+    # Grasp-type diagnostics at episode end. model_700 (0% lift) vs model_1000
+    # (64%) of run 8yelo0qc differed in thumb yaw 0.10 vs 0.82 and squeeze 52
+    # vs 163 N while the contact reward was flat (documents/08 §6).
+    grip_params = {
+      "sensor_name": "hand_object_contact",
+      "pad_parent_indices": rc.PAD_PARENT_INDICES,
+    }
     cfg.metrics.update(
       {
+        "thumb_yaw_last": MetricsTermCfg(
+          func=mdp.joint_pos_mean,
+          params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=(rc.THUMB_YAW_JOINT,))
+          },
+          reduce="last",
+        ),
+        "grip_bodies_last": MetricsTermCfg(
+          func=mdp.HandObjectGrip,
+          params={**grip_params, "quantity": "bodies"},
+          reduce="last",
+        ),
+        "grip_squeeze_xy_last": MetricsTermCfg(
+          func=mdp.HandObjectGrip,
+          params={**grip_params, "quantity": "squeeze_xy"},
+          reduce="last",
+        ),
+        "grip_net_z_last": MetricsTermCfg(
+          func=mdp.HandObjectGrip,
+          params={**grip_params, "quantity": "net_z"},
+          reduce="last",
+        ),
         "object_linear_speed_max": MetricsTermCfg(
           func=mdp.object_linear_speed,
           params={"object_entity": "object"},

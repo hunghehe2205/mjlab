@@ -108,8 +108,9 @@ Reward tổng clip min = −2.
 ## 6. Training
 
 - **Teacher**: PPO thuần (custom impl), γ=0.996, λ=0.95, 4 epochs, 4
-  minibatches, obs normalize bằng running mean/std, reload checkpoint khi
-  exploding gradient.
+  minibatches, reload checkpoint khi exploding gradient. Không normalize
+  obs/reward: train.py tạo VecEnv với `normalize_ob=False` mặc định, cờ
+  `normalize_rew` không được dùng (đính chính; xem 08 §6).
 - **Student**: DAgger (imitate teacher trên cùng state) + PPO, trộn theo
   curriculum `ppo_ratio = min(iter·0.0005, 1)` (thuần imitation → thuần RL
   trong 2000 iter), cộng loss reconstruction cho LSTM. Value function dùng obs
