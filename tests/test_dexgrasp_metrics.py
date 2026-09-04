@@ -6,11 +6,9 @@ import torch
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.dexgrasp.mdp.metrics import (
-  HandObjectGrip,
   LiftSuccess,
   ObjectLiftHeight,
   hand_keypoint_below_table_depth,
-  joint_pos_mean,
   mean_arm_action_magnitude,
   object_angular_speed,
   object_linear_speed,
@@ -66,36 +64,6 @@ def test_hand_keypoint_depth_and_arm_action_metrics() -> None:
     hand_keypoint_below_table_depth(env, 0.75, asset_cfg), torch.tensor([0.05, 0.0])
   )
   assert torch.equal(mean_arm_action_magnitude(env, 2), torch.tensor([0.75, 0.3]))
-
-
-def test_joint_pos_mean_and_grip_metrics() -> None:
-  robot = SimpleNamespace(
-    data=SimpleNamespace(joint_pos=torch.tensor([[0.1, 0.5, 0.9]]))
-  )
-  # force_history (E, P, H, 3): two bodies plus one pad that folds into body 0.
-  history = torch.tensor([[[[0.0, 0.0, -2.0]], [[1.5, 0.0, 0.0]], [[0.5, 0.0, 0.0]]]])
-  sensor = SimpleNamespace(data=SimpleNamespace(force_history=history))
-  env = cast(
-    ManagerBasedRlEnv,
-    SimpleNamespace(scene={"robot": robot, "hand_object_contact": sensor}),
-  )
-  asset_cfg = cast(SceneEntityCfg, SimpleNamespace(name="robot", joint_ids=[1]))
-  torch.testing.assert_close(joint_pos_mean(env, asset_cfg), torch.tensor([0.5]))
-
-  def grip(quantity: str) -> torch.Tensor:
-    cfg = SimpleNamespace(
-      params={
-        "sensor_name": "hand_object_contact",
-        "pad_parent_indices": (0,),
-        "quantity": quantity,
-      }
-    )
-    return HandObjectGrip(cfg, env)(env)
-
-  # Impulse = force x 0.01: body 0 (0.005, 0, -0.02), body 1 (0.015, 0, 0).
-  torch.testing.assert_close(grip("bodies"), torch.tensor([2.0]))
-  torch.testing.assert_close(grip("squeeze_xy"), torch.tensor([0.02]))
-  torch.testing.assert_close(grip("net_z"), torch.tensor([-0.02]))
 
 
 def test_lift_metrics_track_displacement_from_reset() -> None:

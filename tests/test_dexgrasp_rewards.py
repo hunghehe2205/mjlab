@@ -57,7 +57,7 @@ def test_reward_coeffs_complete() -> None:
   expected = {
     "affordance_distance": 0.5,
     "affordance_contact": 1.5,
-    "affordance_impulse": 0.5,  # halved with the enclosure gate
+    "affordance_impulse": 0.5,
     "table_logbarrier": -0.03,
     "table_contact": -1.0,
     "table_impulse": -0.5,

@@ -46,9 +46,6 @@ class EvaluateConfig:
   """Minimum object vertical displacement required for success in metres."""
   device: str | None = None
   """Simulation device; defaults to CUDA when available."""
-  seed: int | None = None
-  """Env seed for object-pose sampling; fix it to compare checkpoints on the
-  same poses. None uses a random seed."""
   output_file: Path | None = None
   """Optional JSON path for per-object success rates."""
 
@@ -85,7 +82,6 @@ def run_object_evaluation(
     object_name=object_name, non_uniform_sampling=False
   )
   env_cfg.scene.num_envs = cfg.num_envs
-  env_cfg.seed = cfg.seed
   env_cfg.terminations = {}
   env_cfg.auto_reset = False
   env = ManagerBasedRlEnv(env_cfg, device=device)

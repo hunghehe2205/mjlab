@@ -168,10 +168,6 @@ FINGER_JOINT_NAMES = (
   "R_pinky_dip_joint",
 )
 
-# Thumb opposition joint: ~0.1 lies alongside the index (no opposition), ~0.8
-# opposes it. Logged at episode end as a grasp-type diagnostic.
-THUMB_YAW_JOINT = "R_thumb_yaw_joint"
-
 # Palm-local grasp reference site (hand_center analog).
 GRASP_CENTER_SITE = "grasp_center"
 

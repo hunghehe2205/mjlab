@@ -10,10 +10,6 @@ from mjlab.rl import (
 
 
 def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
-  # Raw obs, no normalization -- matches the reference (normalize_ob=False; d/af_vec
-  # fed raw). EmpiricalNormalization divides af_vec (std ~0.02) by ~0.03, amplifying
-  # it ~33x so its noise dominates the input and contact never bootstraps (0% at
-  # iter 100 vs 8yelo0qc 0.68). Value-loss noise is tolerated, as in the reference.
   return RslRlOnPolicyRunnerCfg(
     actor=RslRlModelCfg(
       hidden_dims=(128, 128),

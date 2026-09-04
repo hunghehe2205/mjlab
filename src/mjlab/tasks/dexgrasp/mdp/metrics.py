@@ -6,11 +6,6 @@ import torch
 
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.tasks.dexgrasp.mdp.observations import (
-  FLAG_IMPULSE,
-  REFERENCE_IMPULSE_DT,
-  sensor_impulse,
-)
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -69,39 +64,6 @@ def mean_arm_action_magnitude(
 ) -> torch.Tensor:
   """Mean magnitude of raw policy commands for the arm action prefix."""
   return env.action_manager.action[:, :arm_action_dim].abs().mean(dim=1)
-
-
-def joint_pos_mean(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
-  """Mean position of the selected joints (a single joint: its position)."""
-  robot: Entity = env.scene[asset_cfg.name]
-  return robot.data.joint_pos[:, asset_cfg.joint_ids].mean(dim=-1)
-
-
-class HandObjectGrip:
-  """Grip statistic from the hand-object contact sensor (reference impulse scale).
-
-  quantity "bodies": contact bodies with |impulse| > FLAG_IMPULSE.
-  quantity "squeeze_xy": sum of per-body horizontal impulse magnitudes; an
-  opposed squeeze grows it, a one-sided push barely does.
-  quantity "net_z": summed vertical impulse the hand applies to the object;
-  negative presses it into the table, positive carries it.
-  """
-
-  def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
-    self._sensor = env.scene[cfg.params["sensor_name"]]
-    self._pad_parents = cfg.params.get("pad_parent_indices")
-    self._quantity = cfg.params["quantity"]
-    if self._quantity not in ("bodies", "squeeze_xy", "net_z"):
-      raise ValueError(f"Unknown grip quantity '{self._quantity}'.")
-
-  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
-    del env, kwargs
-    impulse = sensor_impulse(self._sensor, REFERENCE_IMPULSE_DT, self._pad_parents)
-    if self._quantity == "bodies":
-      return (impulse.norm(dim=-1) > FLAG_IMPULSE).float().sum(dim=-1)
-    if self._quantity == "squeeze_xy":
-      return impulse[..., :2].norm(dim=-1).sum(dim=-1)
-    return impulse[..., 2].sum(dim=-1)
 
 
 class ObjectLiftHeight:
