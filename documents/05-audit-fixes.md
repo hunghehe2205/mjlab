@@ -1,5 +1,11 @@
 # Audit port RobustDexGrasp → mjlab (UR5e + RH5-DG2) và kế hoạch sửa
 
+> **Báo cáo lịch sử.** Nhiều lỗi và đề xuất trong tài liệu này đã được sửa,
+> đo lại hoặc bác bỏ ở [06](06-experiment-report.md),
+> [07](07-control-authority.md) và [08](08-log-audit-fixes.md). Không dùng
+> bảng thông số tại đây thay cho
+> [cấu hình teacher hiện tại](02-phase1-teacher-plan.md).
+
 Đối chiếu `mjlab-DexGrasp` @ `325ec45` với `RobustDexGrasp` gốc (nhánh teacher),
 kèm số liệu đo trực tiếp trên env và trên run training đang chạy.
 

@@ -1,5 +1,10 @@
 # Phân tích RobustDexGrasp và mapping sang UR5e + RH5-DG2
 
+> **Snapshot thiết kế ban đầu.** Các thông số `0.01/20`, standoff `0.25` và
+> danh sách “chưa có” bên dưới mô tả paper hoặc trạng thái repo tại thời điểm
+> khảo sát. Cấu hình runtime hiện tại nằm ở
+> [02-phase1-teacher-plan.md](02-phase1-teacher-plan.md).
+
 Phân tích dựa trên code thực tế của repo (không chỉ paper):
 `raisimGymTorch/env/envs/allegro_teacher/`, `allegro_student/`,
 `env/RaisimGymVecEnvOther.py`, `helper/initial_pose_final.py`.

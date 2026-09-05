@@ -1,5 +1,9 @@
 # 07 — Khôi phục quyền điều khiển (sau báo cáo so sánh)
 
+> **Báo cáo lịch sử.** Các kết luận controller/gravcomp vẫn giải thích code,
+> nhưng standoff `0.25 → 0.13` trong tài liệu này sau đó đã đổi thành `0.10`.
+> Xem [02](02-phase1-teacher-plan.md) cho runtime hiện tại.
+
 Áp mục 1–6 của thứ tự gộp trong đối thoại. Mọi số đều đo trên máy local,
 `potted_meat_can` trừ chỗ ghi rõ khác.
 

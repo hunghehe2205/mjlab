@@ -1,5 +1,9 @@
 # Báo cáo thực nghiệm — eval teacher + quét physics
 
+> **Báo cáo lịch sử.** Tài liệu ghi lại các probe dẫn tới gravcomp, gain và
+> physics hiện tại. Kết quả 0% ở đây không phải kết quả mới nhất; xem
+> [02](02-phase1-teacher-plan.md) và [08](08-log-audit-fixes.md).
+
 Chạy sau khi 3 fix của [05-audit-fixes.md](05-audit-fixes.md) được áp (`ac33c3b`).
 Run tham chiếu: wandb `mjlab-dexgrasp/vcb6edm2`, checkpoint `model_2400.pt`.
 

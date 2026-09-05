@@ -1,5 +1,8 @@
 # RobustDexGrasp attempts
 
+> Ghi chú lịch sử rất sớm. Danh sách run và kết luận mới hơn nằm ở
+> [08-log-audit-fixes.md](08-log-audit-fixes.md).
+
 ## 2026-08-25 — Teacher smoke-train baseline
 
 - Added the 35-object RobustDexGrasp cohort and collision assets.

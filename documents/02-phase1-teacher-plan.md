@@ -1,149 +1,181 @@
-# Phase 1 — Teacher policy (privileged PPO)
+# Teacher hiện tại — privileged PPO
 
-Mục tiêu: teacher grasp được cohort 35 object RobustDexGrasp trên UR5e +
-RH5-DG2 trong mjlab, eval lift success > ~80% trước khi sang Phase 2.
+Tài liệu này là source of truth cho teacher trên UR5e + RH5-DG2. Nó mô tả
+code tại commit `999a41bb3` cộng phần additive trong working tree (eval seed,
+`grip_metrics.py`, mode `squeeze_xy` chưa dùng), và tách rõ ba mức: đã triển
+khai, đã kiểm chứng qua eval, và đang thử nghiệm. Kế hoạch đang thực thi và
+thay đổi reward sắp tới nằm ở [09](09-r1-plan.md).
 
-Cấu trúc code đích:
+## Mục tiêu và cổng chuyển phase
 
+Teacher chỉ học grasp như paper gốc; lift chỉ là bài test trong eval. Thứ tự:
+
+1. single-object qua cổng 09 §6: 5 checkpoint liên tiếp mean ba seed ≥ 60%,
+   mean của 5 checkpoint ≥ 70%, không cú tụt liền kề quá 15 điểm, thumb yaw
+   giữ ≥ 0.6, displacement không tăng quá 2 cm trong cửa sổ;
+2. giữ nguyên cấu hình đã qua cổng để train curriculum 5 object;
+3. chỉ mở toàn bộ 35 object sau khi 5 object ổn định.
+
+Run `8yelo0qc` đã chứng minh enclosure-gated reward có thể đạt khoảng 62%,
+nhưng checkpoint trôi mạnh và reward train không dự báo được lift success.
+Hai smoke run observation normalization đã thất bại; HEAD đã quay lại raw obs
+và enclosure gate của baseline.
+
+## Trạng thái run hiện tại
+
+| Run | Reward | Obs norm | Kết quả |
+| --- | --- | --- | --- |
+| `8yelo0qc` | enclosure | không | contact 1.98 ở iter 100–200, 2.95 ở 200–300 |
+| `61rxeq95` | enclosure, giống baseline | có | contact 0.000 rồi 0.001; kết thúc 300 iter |
+| `hggth52d` | enclosure × opposition | có | contact 0; crash ở iter 201 |
+
+`61rxeq95` là ablation quyết định: sau khi bỏ opposition, reward giống
+`8yelo0qc` nhưng policy vẫn không bootstrap. Biến chung của hai run thất bại
+là empirical observation normalization. Vì vậy không còn kết luận “reward
+quá thưa” từ hai smoke run này; opposition ramp chưa từng được test sạch với
+raw observation.
+
+Value loss thấp trong `hggth52d` không chứng minh critic tốt hơn: khi contact
+không xuất hiện, return gần như hằng và bài toán value trở nên dễ giả tạo.
+
+## Assets và scene
+
+- [x] UR5e + RH5-DG2, 24 khớp điều khiển, gravcomp và gain đã hiệu chỉnh.
+- [x] Site `grasp_center`, collision cho pad, init finger pose thumb yaw 0.3.
+- [x] 35 object từ cohort RobustDexGrasp cùng metadata 200 affordance points,
+  centroid và lowest point.
+- [x] Object collision hiện dùng một convex hull của
+  `top_watertight_tiny.obj`.
+- [x] `VariantEntityCfg` cho curriculum 5 object và full 35 object.
+- [ ] Chưa ghép mesh bottom/non-affordance và chưa chạy drop-test tự động cho
+  toàn bộ cohort.
+
+Ba task được đăng ký:
+
+| Task | Object |
+| --- | --- |
+| `Mjlab-DexGrasp-UR5eRH5DG2-Single` | potted meat can |
+| `Mjlab-DexGrasp-UR5eRH5DG2-Phase1` | 5 object |
+| `Mjlab-DexGrasp-UR5eRH5DG2` | 35 object |
+
+## Simulation và reset
+
+- Physics timestep: `0.005 s`.
+- Action decimation: `40`, tương đương policy 5 Hz.
+- MuJoCo: Newton, implicit-fast, pyramidal cone, `impratio=1`.
+- Episode: 14 s, 70 action.
+- Default full task: 88 env theo trọng số object của repo gốc.
+- Reset pose object: vùng cực gốc, sampling edge-biased được bật khi train.
+- Camera cố định: `[0.035, -0.58, 1.531]`.
+- IK: analytic UR5e, chọn pre-grasp collision-free.
+- Standoff theo site `grasp_center`: `0.10 m`, không phải 0.25 m của Allegro.
+
+IK pre-grasp vẫn là điểm xuất phát chuẩn. Nhiễu pose để tạo closed-loop reach
+robust là bước sau khi grasp single/multi-object đã ổn định; chưa trộn vào
+smoke run hiện tại.
+
+## Action
+
+- Relative joint-position target, arm scale `0.005`, finger scale `0.015`.
+- Absolute target được clamp về joint limits.
+- Với xác suất 0.5, physics substep đầu của mỗi control step dùng target trước.
+  Đây là delay đang có trong teacher; không phải observation lag 1–2 control
+  step của student trong paper.
+
+## Observation
+
+Actor và critic dùng cùng privileged observation 191 chiều:
+
+| Thành phần | Dim |
+| --- | ---: |
+| joint position + PD error | 48 |
+| contact flags + impulse | 32 |
+| hand keypoint height + arm link height | 30 |
+| grasp center + wrist orientation/difference | 9 |
+| affordance vectors | 72 |
+| Tổng | 191 |
+
+`obs_normalization=False` cho cả actor và critic, khớp repo gốc và baseline
+`8yelo0qc`. Không bật lại `EmpiricalNormalization` cho toàn observation:
+contact flag gần hằng trong exploration trở thành outlier rất lớn khi lần đầu
+chuyển từ 0 sang 1, còn af-vector bị khuếch đại và phân phối đầu vào actor trôi
+liên tục. Nếu cần giúp critic, test critic-only normalization hoặc fixed
+per-feature scaling như một ablation riêng.
+
+## Reward hiện tại
+
+| Term | Weight | Ghi chú |
+| --- | ---: | --- |
+| affordance distance | +0.5 | weighted nearest-point distance |
+| affordance contact | +1.5 | enclosure gate |
+| affordance impulse | +0.5 | enclosure gate |
+| table log-barrier/contact/impulse | −0.03/−1/−0.5 | |
+| arm height/contact/impulse/collision | −0.05/−0.1/−0.1/−1 | |
+| object vel/angular vel/displacement | −5/−0.1/−2 | mềm hơn paper; nhánh OD thử displacement −5, vel/qvel giữ nguyên |
+| wrist vel/angular vel | −1/−0.1 | |
+| arm joint velocity | −1 | |
+
+Không clip reward tổng và không có terminal penalty, khớp hành vi thực tế của
+code gốc. `ContactReward` có thêm mode `squeeze_xy` trong working tree; probe
+08 §10 cho thấy nó không phân biệt được grip nên không term nào dùng.
+
+### Enclosure gate
+
+HEAD dùng `EnclosureGatedContact`. Pipeline chính xác:
+
+```text
+contact/impulse thô
+  → gate nhị phân: thumb tip + ít nhất 2 non-thumb fingertips
 ```
-src/mjlab/tasks/dexgrasp/
-  __init__.py
-  dexgrasp_env_cfg.py                  # make_dexgrasp_env_cfg()
-  mdp/{__init__,observations,rewards,terminations,events}.py
-  pregrasp/{ik_ur5e.py,pose_sampler.py}
-  rl/{__init__}.py
-  config/ur5e_rh5dg2/{__init__,env_cfgs,rl_cfg}.py   # register_mjlab_task
-assets: src/mjlab/asset_zoo/objects/dexgrasp/...
-```
 
-## A. Assets
+Không có bằng chứng gate cliff gây các cú tụt eval của `8yelo0qc`. Cơ chế đã
+đo được là reward contact/impulse bão hòa và không phân biệt hook grasp với
+wrap grasp. `OppositionGatedContact` từng được thêm ở `9a62eaacb` rồi revert;
+do run đó đồng thời bật obs normalization, chưa thể kết luận opposition giúp
+hay hại. Probe 08 §10 sau đó cho thấy thumb yaw là đại lượng duy nhất cô lập
+vùng hook, nên R1 khôi phục ramp này với raw obs (09 §1, §3).
 
-- [x] Thêm site `grasp_center` vào lòng bàn tay `right_hand.xml` — palm-local
-  `[0.05, 0, 0.11]`, x hướng ra lòng bàn tay. Ước lượng đầu, refine ở §C viewer.
-- [x] Thêm collision geom (class `rh5dg2_hand_collision`) cho 6 body
-  `R_*_force_sensor` — dùng chính mesh pad (convex hull).
-- [x] Định nghĩa `INIT_FINGER_POSE` cho 18 khớp (cupped, thumb đối diện) — hằng
-  số trong constants, verify self-collision-free. (Chưa nhét vào keyframe: reset
-  event ở §C sẽ set; home keyframe giữ ngón mở = 0.)
-- [x] Thêm `ACTION_SCALE_ARM=0.005`, `ACTION_SCALE_FINGER=0.015` + nhóm tên khớp.
-- [x] Nhập cohort 35 object `new_training_set` của RobustDexGrasp. Dùng mesh
-  collision `top_watertight_tiny.obj`, tạo 200 affordance points + lowest-point
-  metadata; giữ box/cylinder là object debug ngoài cohort.
-- [x] Script `precompute.py`: 200 surface points + normals + centroid + lowest
-  → `.npz` cạnh mesh.
-- [x] Mesh → MJCF `spec_fn`: collision = **convex hull** (không coacd, xem
-  problems/coacd), freejoint, material `object`; wrap `EntityCfg` + registry
-  `PHASE1_OBJECTS`. (`VariantEntityCfg` để §B khi dựng scene multi-object.)
-- [x] Test: mở rộng `test_ur5e_rh5dg2_constants.py` + mới `test_dexgrasp_objects.py`.
+## Metrics và eval
 
-## B. Scene & task skeleton
+HEAD không còn các metric thử nghiệm `thumb_yaw_last`, `grip_bodies_last`,
+`grip_squeeze_xy_last` và `grip_net_z_last`. Các số phân tích hook/wrap trong
+§08 đến từ probe offline qua `mdp/grip_metrics.py`. R1 thêm lại metric online
+`thumb_yaw_last`, `object_displacement_last`, `h_load_last`, `push_last`
+(09 §3).
 
-- [x] `SceneCfg`: bàn box tĩnh (top 0.771 m, friction 0.2) + **bục riêng** cho
-  UR5e (base flush mặt bàn z=0.771, khe ~8cm) + object. Fixed-base entity
-  auto-mocap → reset về env_origins. Arm menagerie actuator adopt qua
-  `XmlActuatorCfg` (action điều khiển đủ 24 khớp). Cả 35 object đã mesh-hóa →
-  `VariantEntityCfg` gán một mesh theo mỗi world. Cohort mặc định dùng weight
-  gốc (44 slots: scissors/off_water_body ×3, 7 object khó ×2, còn lại ×1),
-  với 2 lần lặp thành 88 environment train mặc định.
-- [x] `ContactSensor` hand↔object: 16 body (palm + 3 link cuối mỗi ngón; pad là
-  fixed-child của dip/palm nên subtree-sensor gộp luôn), `reduce="netforce"` +
-  `history_length=DECIMATION` → impulse = Σ substeps force × dt. (→ §E; sensor
-  ngón↔bàn và arm↔{bàn, object} để §F khi cần reward table/arm.)
-- [x] Sim cfg: `timestep=0.01`, `decimation=20`, `impratio=10`,
-  `cone="elliptic"`, `nconmax=150`/`njmax=1500`; episode 14 s (70 bước).
-- [x] Đăng ký task `Mjlab-DexGrasp-UR5eRH5DG2` qua `register_mjlab_task`.
+Eval chạy 70 bước policy rồi 90 bước scripted lift, target nâng 0.15 m. Success
+khi độ cao cuối của object tăng hơn 0.10 m. Working tree đã có `--seed` và
+JSON thêm `frac_drop` (gain dưới −1 cm) và `frac_tipped` (trục z object lệch
+quá 45°). Protocol chuẩn: 128 episode × seed 0/1/2, báo mean và min theo seed.
 
-## C. Reset & pre-grasp (event terms, CPU per-reset như bản gốc)
+## PPO
 
-- [x] Event sample pose object (`pregrasp/pose_sampler.py::sample_object_pose`):
-  phân cực r ∈ [0.45, 0.75], góc ∈ [−0.7π, −0.3π], |x| < 0.25, xoay z, z = mặt
-  bàn − lowest_point. Phase 1 uniform; nhánh Beta wired (`non_uniform`) cho Phase 2.
-- [x] Visible points (`pregrasp/visibility.py`): raycast trimesh từ camera cố
-  định (env frame, `CAMERA_POSITION` port từ gốc — verify viewer, xem problems/
-  pregrasp-ur5e-tuning) → visible surface + tâm. Fallback ray-miss = điểm pcd.
-- [x] `sample_rot_mats` (`pregrasp/pose_sampler.py`): N palm-roll quanh trục tiếp
-  cận + projection width; test rot-mat orthonormal, det=+1.
-- [x] **IK giải tích UR5e** (`pregrasp/ik_ur5e.py`): analytic 8-nghiệm UR, DH
-  fit theo MJCF UR5e (không phải textbook) + offset base/flange đo từ MuJoCo FK
-  (`_B=Rz(π)`, `_E≈I`); `solve_arm_qpos(T_base_flange, seed)`. Test round-trip
-  FK(IK)≈pose vs MuJoCo: **≤0.5mm** trên 500 pose, 0 miss. `_ARG_TOL=1e-2` để
-  không loại nhầm pose reachable do residual DH.
-- [x] Scoring + composition (`pregrasp/generator.py::generate_pregrasp`):
-  visible → approach → grasp-center target (0.25m) → sample_rot_mats → IK mỗi
-  candidate qua `ArmKinematics` (`pregrasp/kinematics.py`, đo frame flange↔gc từ
-  model) → chọn best theo projection width < 0.18 (coeff 5) + wrist angle. Test
-  integration trên object thật + grasp-center round-trip sub-mm.
-- [x] Reset event (`mdp/events.py::ResetGraspPose`) + wire vào robot cfg: ghi
-  object root (sampled pose + env_origin) + arm qpos, fingers giữ default
-  (`INIT_FINGER_POSE`). Test: grasp-center in-sim khớp IK prediction, object trên
-  bàn, no NaN; đọc mesh/point cloud/lowest-point theo variant từng world.
-  Probe tĩnh arm↔hand reject candidate va chạm và resample tối đa 8 lần;
-  fallback chỉ dùng khi collision-free, nếu không về HOME pose an toàn.
-- [x] `sim.forward()` sau ghi pose: env tự forward sau reset events (`_reset_idx`
-  → `write_data_to_sim` → `sim.forward()`), reset event không cần tự gọi.
+- Actor/critic: MLP 128 × 128, LeakyReLU.
+- Gaussian scalar std, init 1.0, floor 0.2.
+- Learning rate cố định `5e-4`.
+- Gamma `0.996`, lambda `0.95`.
+- PPO clip `0.2`, value loss coeff `0.5`, entropy coeff 0.
+- 4 epoch, 4 minibatch, max grad norm `0.5`.
+- Một rollout chứa đủ 70 bước của episode.
 
-## D. Actions
+Log hiện tại không ủng hộ việc tune PPO trước. PPO train trơn trong
+`8yelo0qc`; vấn đề là reward tĩnh không xếp hạng đúng chất lượng grip dưới
+scripted lift.
 
-- [x] `RelativeJointPositionActionCfg`, scale arm 0.005 / finger 0.015 (đã có ở
-  §B), + **soft-limit target clip**: thêm cờ opt-in `clip_to_joint_limits` cho
-  `RelativeJointPositionAction` (clamp *absolute target* về `soft_joint_pos_limits`;
-  delta vẫn không clip). Arm tự bound qua actuator ctrlrange; cờ này cần cho ngón.
-  Bật trong `make_dexgrasp_env_cfg`. Test `test_actions.py`: clamp khi bật, giữ
-  nguyên khi tắt (default off, không đổi hành vi task khác).
-- [ ] (Tùy chọn, bám gốc) random 1-step action delay — bỏ ở teacher phase 1,
-  thêm ở student (§ Phase 3).
+## Việc tiếp theo
 
-## E. Observations (group `actor` = `critic`, đều privileged)
+Toàn bộ ở [09](09-r1-plan.md). Tóm tắt:
 
-- [x] Proprio: qpos (24) + sai số PD `target − qpos` (24).
-- [x] Contact flags (16) + impulse magnitude (16) từ ContactSensor
-  (ngưỡng 0.001/0.01 N·s giữ baseline RaiSim — calibrate lại ở §H).
-- [x] Chiều cao 24 keypoint + 6 arm link so mặt bàn.
-- [x] `grasp_center` pos (3), euler wrist (3), euler diff so init (3, unwrap).
-- [x] **af_vec (72)**: term GPU thuần torch — transform 200-point cloud theo
-  object pose hiện tại, `torch.cdist` với 24 keypoint (wrist + 18 khớp + 5
-  tip), lấy vector tới điểm gần nhất, xoay về trục world.
-- [x] Unit test af_vec trên case nhỏ tính tay (+ euler/unwrap, + env test bắn
-  contact palm khi ép object vào lòng bàn tay).
-
-Tổng **191 dim** (24+24+32+24+6+3+6+72). Chi tiết đặt tên frame/body, euler
-convention, và trap khi cài xem `problems/phase1-observations-notes.md`.
-
-## F. Rewards (`mdp/rewards.py`, giữ coeff gốc làm baseline)
-
-- [x] affordance distance: −Σ wᵢ·min_dist (tip ×4, thumb tip ×8, palm 0) — coeff 0.5.
-- [x] affordance contact (weighted, tip ×3, thumb ×2) — coeff 1.5.
-- [x] affordance impulse xy (clip 0.1 link thường / 0.2 thumb) — coeff 1.0.
-- [x] table contact/impulse (−1.0 / −0.5) + table log-barrier (−0.03).
-- [x] arm: height log-barrier (−0.05), contact/impulse (−0.1), collision (−1.0).
-- [x] object: vel (−15), qvel (−0.2), displacement (−5).
-- [x] wrist vel/qvel (−1.0/−0.1, ×10 khi >0.25), arm joint vel (−1.0, ×4 khi >0.5).
-- [x] Reward tổng clip min −2 (hook trong env, opt-in `reward_clip_min`) + `scale_rewards_by_dt=False`
-  (reference rewards tính per control step, không scale theo dt).
-
-Đã bỏ `action_rate_l2` skeleton (reference không có). Ghi chú: arm_contact/impulse
-chỉ filter theo table (arm chạm object bị arm_collision bắt); clip impulse dùng
-index thumb tường minh thay vì "3 contact cuối" (xem
-problems/phase1-rewards-notes.md).
-
-## G. Termination & eval
-
-- [x] `time_out` 70 bước; terminate khi keypoint tay dưới mặt bàn; NaN guard.
-- [x] Metric success: script eval riêng — sau 70 bước grasp, arm target nội suy
-  về pose nâng trong 80–100 bước (5 Hz), success = object z tăng > 0.1 m;
-  log per-object success rate cho toàn bộ cohort 35 object.
-
-## H. RL config & train
-
-- [x] `RslRlOnPolicyRunnerCfg`: MLP 128×128, γ=0.996, λ=0.95, 4 epochs, 4
-  minibatches, min action std 0.2; obs normalization bật (gốc không, 08 §6).
-- [ ] Smoke train (~vài trăm iter, ít env): reward tăng, không NaN, contact
-  xuất hiện.
-- [ ] Train đầy đủ + đánh giá: tune PD gains ngón / ngưỡng contact nếu grasp
-  bất ổn.
-
-## Thứ tự làm việc gợi ý
-
-A (assets) → B (skeleton chạy được với action zero) → C (reset/pre-grasp,
-verify bằng viewer thấy tay đặt đúng pre-grasp quanh object) → D+E → F+G →
-H. Mỗi mốc verify bằng viewer/`uv run play` trước khi sang bước sau.
+1. Giữ actor/critic raw obs; không tiếp tục hai smoke run normalization.
+2. Screening ba nhánh từ `model_1400`, optimizer mới (`load_optimizer=False`),
+   LR 1e-4, 300 iter: C đối chứng, O chỉ opposition ramp, OD ramp +
+   displacement −5. obj_vel/obj_qvel giữ −5/−0.1; hệ số paper −15/−0.2 hoãn
+   vì probe không có bằng chứng (09 §1–§2).
+3. Nhánh thắng chạy 800 iter. Eval mỗi 50 iteration, 3 seed, chọn checkpoint
+   theo scripted lift; cổng 09 §6; `frac_tipped` chỉ chẩn đoán.
+4. Không thêm lift hay hold vào training. Fallback theo chữ ký đo được, vẫn
+   grasp-only (09 §6).
+5. Smoke from-scratch 300 iter cho cấu hình thắng (09 §7), rồi mới mở 5
+   object; noise pre-grasp/reach và 35 object để sau.
+6. Bỏ mode `squeeze_xy` khỏi `ContactReward` trước khi commit; giữ helper
+   trong `grip_metrics.py`.
