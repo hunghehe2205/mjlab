@@ -10,7 +10,7 @@ import trimesh
 
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.objects.dexgrasp.precompute import get_object_trimesh
-from mjlab.entity import Entity
+from mjlab.entity import Entity, EntityCfg
 from mjlab.sim import MujocoCfg, Simulation, SimulationCfg
 
 OBJECT_NAMES = tuple(oc.PHASE1_OBJECTS)
@@ -27,7 +27,7 @@ def test_load_affordance_mesh_matches_collision_hull(name: str) -> None:
 @pytest.mark.parametrize("name", OBJECT_NAMES)
 def test_object_spec_compiles(name: str) -> None:
   obj = oc.PHASE1_OBJECTS[name]
-  entity = Entity(obj.get_entity_cfg())
+  entity = Entity(EntityCfg(spec_fn=obj.spec_fn))
   model = entity.spec.compile()
   # Single free body with a collision geom.
   assert not entity.is_fixed_base

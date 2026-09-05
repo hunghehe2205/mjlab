@@ -1,10 +1,8 @@
-"""DexGrasp teacher env skeleton (robot-agnostic).
+"""Robot-agnostic DexGrasp teacher env config.
 
-Builds the scene (table + arm pedestal + one grasp object), delta-joint action,
-minimal proprio observations, and a time-out termination so the env runs with
-zero action. Privileged observations (§E), the reward stack (§F), and the
-analytic-IK pre-grasp reset (§C) are filled in later phases. Per-robot wiring
-(robot entity, action scale, object placement) lives in ``config/<robot>/``.
+Scene (table, pedestal, one grasp object), delta-joint action, privileged
+observation terms and time-out termination. Per-robot wiring (robot entity,
+action scale, rewards, sensors, pre-grasp reset) lives in ``config/<robot>/``.
 """
 
 from __future__ import annotations

@@ -17,7 +17,6 @@ import mujoco
 import numpy as np
 import trimesh
 
-from mjlab.entity import EntityCfg
 from mjlab.entity.variants import VariantEntityCfg
 
 OBJECTS_DIR = Path(__file__).parent
@@ -134,16 +133,15 @@ ROBUST_DEXGRASP_SOURCES = {
 OBJECT_NAMES = DEBUG_OBJECT_NAMES + ROBUST_DEXGRASP_TRAIN_OBJECTS
 
 
-def get_mesh_object_spec(name: str, fixed: bool = False) -> mujoco.MjSpec:
-  """One mesh collision body."""
+def get_mesh_object_spec(name: str) -> mujoco.MjSpec:
+  """One free mesh collision body."""
   spec = mujoco.MjSpec()
   spec.add_material(name="object", rgba=OBJECT_RGBA)
   spec.meshdir = str(ASSETS_DIR / name)
   spec.add_mesh(name="object_mesh", file="collision.obj")
   body = spec.worldbody.add_body(name="object")
-  if not fixed:
-    joint = body.add_freejoint(name="object_joint")
-    joint.damping = np.full(3, OBJECT_FREE_JOINT_DAMPING)
+  joint = body.add_freejoint(name="object_joint")
+  joint.damping = np.full(3, OBJECT_FREE_JOINT_DAMPING)
   geom = body.add_geom()
   geom.name = "object_collision"
   geom.type = mujoco.mjtGeom.mjGEOM_MESH
@@ -207,9 +205,6 @@ class DexGraspObject:
       mesh = mesh.dump(concatenate=True)
     assert isinstance(mesh, trimesh.Trimesh)
     return mesh.convex_hull
-
-  def get_entity_cfg(self) -> EntityCfg:
-    return EntityCfg(spec_fn=self.spec_fn)
 
 
 def _build_registry() -> dict[str, DexGraspObject]:

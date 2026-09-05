@@ -82,19 +82,16 @@ def get_dexgrasp_robot_cfg() -> EntityCfg:
   )
 
 
-def get_skeleton_object_cfg(name: str, fixed: bool = False) -> EntityCfg:
+def get_skeleton_object_cfg(name: str) -> EntityCfg:
   obj = oc.PHASE1_OBJECTS[name]
   init_state = EntityCfg.InitialStateCfg(
     pos=(OBJECT_XY[0], OBJECT_XY[1], TABLE_TOP_Z - obj.lowest_point),
   )
-  return EntityCfg(
-    init_state=init_state,
-    spec_fn=lambda: oc.get_mesh_object_spec(name, fixed=fixed),
-  )
+  return EntityCfg(init_state=init_state, spec_fn=obj.spec_fn)
 
 
 def get_dexgrasp_object_cfg(object_names: tuple[str, ...]) -> EntityCfg:
-  """Create a fixed object or a per-world mesh-variant object entity."""
+  """Create a single-object entity or a per-world mesh-variant entity."""
   if len(object_names) == 1:
     return get_skeleton_object_cfg(object_names[0])
   if object_names == oc.ROBUST_DEXGRASP_TRAIN_OBJECTS:
@@ -372,14 +369,10 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   selected_object_names = object_names or (
     (object_name,) if object_name is not None else oc.ROBUST_DEXGRASP_TRAIN_OBJECTS
   )
-  if play:
-    if len(selected_object_names) > 1:
-      selected_object_names = (SKELETON_OBJECT,)
-    cfg.scene.entities["object"] = get_skeleton_object_cfg(
-      next(iter(selected_object_names)), fixed=True
-    )
-  else:
-    cfg.scene.entities["object"] = get_dexgrasp_object_cfg(selected_object_names)
+  # Play previews one free object; a fixed object would hide grip failures.
+  if play and len(selected_object_names) > 1:
+    selected_object_names = (SKELETON_OBJECT,)
+  cfg.scene.entities["object"] = get_dexgrasp_object_cfg(selected_object_names)
   if object_name is None and object_names is None and not play:
     cfg.scene.num_envs = oc.ROBUST_DEXGRASP_BASELINE_NUM_ENVS
   cfg.scene.sensors = cfg.scene.sensors + (
@@ -401,34 +394,26 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   if not play:
     cfg.metrics.update(
       {
-        "object_linear_speed_max": MetricsTermCfg(
-          func=mdp.object_linear_speed,
-          params={"object_entity": "object"},
-          reduce="max",
+        "thumb_yaw_last": MetricsTermCfg(
+          func=mdp.joint_pos_mean,
+          params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=("R_thumb_yaw_joint",))
+          },
+          reduce="last",
         ),
-        "object_angular_speed_max": MetricsTermCfg(
-          func=mdp.object_angular_speed,
+        "object_displacement_last": MetricsTermCfg(
+          func=mdp.ObjectDisplacement,
           params={"object_entity": "object"},
-          reduce="max",
+          reduce="last",
         ),
-        "hand_keypoint_below_table_depth_max": MetricsTermCfg(
-          func=mdp.hand_keypoint_below_table_depth,
-          params={"table_top_z": TABLE_TOP_Z, "asset_cfg": keypoints},
-          reduce="max",
+        "object_tilt_deg_last": MetricsTermCfg(
+          func=mdp.object_tilt_deg,
+          params={"object_entity": "object"},
+          reduce="last",
         ),
         "arm_action_magnitude_mean": MetricsTermCfg(
           func=mdp.mean_arm_action_magnitude,
           params={"arm_action_dim": len(rc.ARM_JOINT_NAMES)},
-        ),
-        "object_lift_height_max": MetricsTermCfg(
-          func=mdp.ObjectLiftHeight,
-          params={"object_entity": "object"},
-          reduce="max",
-        ),
-        "lift_success": MetricsTermCfg(
-          func=mdp.LiftSuccess,
-          params={"object_entity": "object", "success_height": 0.10},
-          reduce="max",
         ),
       }
     )

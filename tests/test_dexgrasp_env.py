@@ -179,7 +179,7 @@ def test_skeleton_builds_and_steps() -> None:
 
 
 @pytest.mark.slow
-def test_play_object_stays_fixed() -> None:
+def test_play_uses_free_object_and_ik_pregrasp() -> None:
   cfg = dexgrasp_ur5e_rh5dg2_env_cfg(play=True, object_name=SKELETON_OBJECT)
   with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -188,14 +188,13 @@ def test_play_object_stays_fixed() -> None:
       env.reset()
       obj = env.scene["object"]
       robot = env.scene["robot"]
-      start = obj.data.root_link_pose_w.clone()
       arm_start = robot.data.joint_pos[0, :6].clone()
       for _ in range(10):
         env.step(torch.zeros(env.num_envs, 24))
-      end = obj.data.root_link_pose_w
+      is_fixed = obj.is_fixed_base
       env.close()
 
-  assert torch.allclose(end, start, atol=1e-6)
+  assert not is_fixed
   home = rc.HOME_KEYFRAME.joint_pos or {}
   assert not torch.allclose(
     arm_start, torch.tensor([home[name] for name in rc.ARM_JOINT_NAMES])

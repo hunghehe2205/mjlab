@@ -62,17 +62,11 @@ REWARD_COEFFS = {
   "arm_contact": -0.1,
   "arm_impulse": -0.1,
   "arm_collision": -1.0,
-  # Softened ~3x from the reference (-15/-0.2/-5). Those weights are tuned for
-  # RaiSim's concave meshes and same-pose reset; on convex-hull objects with
-  # per-reset resampling they punish the clumsy early-exploration contact so
-  # hard that the policy retreats to a "stay back" local optimum and never
-  # discovers grasping. A per-step probe shows clean contact barely triggers
-  # them (obj_vel -0.003, obj_disp -0.023); the -8.6 seen in training comes
-  # from light objects being knocked off the table during exploration. These
-  # values keep the disturbance signal while letting exploration survive.
-  "object_velocity": -5.0,
-  "object_angular_velocity": -0.1,
-  "object_displacement": -2.0,
+  # Reference object-stability coefficients; the softened -5/-0.1/-2 let the
+  # policy push and tip the object (8yelo0qc displacement 3 -> 8 cm).
+  "object_velocity": -15.0,
+  "object_angular_velocity": -0.2,
+  "object_displacement": -5.0,
   "wrist_velocity": -1.0,
   "wrist_angular_velocity": -0.1,
   "arm_joint_velocity": -1.0,

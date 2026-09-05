@@ -1,3 +1,6 @@
+"""Tests for the DexGrasp online metric terms."""
+
+import math
 from types import SimpleNamespace
 from typing import cast
 
@@ -6,87 +9,43 @@ import torch
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.dexgrasp.mdp.metrics import (
-  LiftSuccess,
-  ObjectLiftHeight,
-  hand_keypoint_below_table_depth,
+  joint_pos_mean,
   mean_arm_action_magnitude,
-  object_angular_speed,
-  object_linear_speed,
+  object_tilt_angle,
+  object_tilt_deg,
 )
 
 
-def _env_with_object_velocity(linear: torch.Tensor, angular: torch.Tensor):
-  obj = SimpleNamespace(
-    data=SimpleNamespace(
-      root_link_lin_vel_w=linear,
-      root_link_ang_vel_w=angular,
-    )
-  )
-  scene = {"object": obj}
-  return cast(ManagerBasedRlEnv, SimpleNamespace(scene=scene))
-
-
-def test_object_speed_metrics_report_physical_units() -> None:
-  env = _env_with_object_velocity(
-    torch.tensor([[3.0, 4.0, 0.0], [0.0, 0.0, 2.0]]),
-    torch.tensor([[0.0, 0.0, 12.0], [1.0, 2.0, 2.0]]),
-  )
-
-  assert torch.equal(object_linear_speed(env), torch.tensor([5.0, 2.0]))
-  assert torch.equal(object_angular_speed(env), torch.tensor([12.0, 3.0]))
-
-
-def test_hand_keypoint_depth_and_arm_action_metrics() -> None:
-  class Scene(dict):
-    env_origins: torch.Tensor
-
+def test_arm_action_and_joint_metrics() -> None:
   robot = SimpleNamespace(
-    data=SimpleNamespace(
-      body_link_pos_w=torch.tensor(
-        [[[0.0, 0.0, 0.8], [0.0, 0.0, 0.7]], [[0.0, 0.0, 0.9], [0.0, 0.0, 0.85]]]
-      )
-    )
+    data=SimpleNamespace(joint_pos=torch.tensor([[0.2, 0.4], [1.0, 3.0]]))
   )
-  scene = Scene(robot=robot)
-  scene.env_origins = torch.zeros(2, 3)
   env = cast(
     ManagerBasedRlEnv,
     SimpleNamespace(
-      scene=scene,
+      scene={"robot": robot},
       action_manager=SimpleNamespace(
         action=torch.tensor([[1.0, -0.5, 0.0], [0.2, 0.4, 0.6]])
       ),
     ),
   )
-  asset_cfg = cast(SceneEntityCfg, SimpleNamespace(name="robot", body_ids=[0, 1]))
+  asset_cfg = cast(SceneEntityCfg, SimpleNamespace(name="robot", joint_ids=[1]))
+
+  assert torch.equal(mean_arm_action_magnitude(env, 2), torch.tensor([0.75, 0.3]))
+  assert torch.equal(joint_pos_mean(env, asset_cfg), torch.tensor([0.4, 3.0]))
+
+
+def test_object_tilt() -> None:
+  half = math.sqrt(0.5)
+  quat = torch.tensor(
+    [[1.0, 0.0, 0.0, 0.0], [half, half, 0.0, 0.0]]
+  )  # upright, on side
+  obj = SimpleNamespace(data=SimpleNamespace(root_link_quat_w=quat))
+  env = cast(ManagerBasedRlEnv, SimpleNamespace(scene={"object": obj}))
 
   torch.testing.assert_close(
-    hand_keypoint_below_table_depth(env, 0.75, asset_cfg), torch.tensor([0.05, 0.0])
+    object_tilt_angle(quat), torch.tensor([0.0, math.pi / 2]), atol=1e-6, rtol=0
   )
-  assert torch.equal(mean_arm_action_magnitude(env, 2), torch.tensor([0.75, 0.3]))
-
-
-def test_lift_metrics_track_displacement_from_reset() -> None:
-  # At reset, xpos (root_link_pos_w) is stale from the previous episode; the
-  # metrics must snapshot the freshly written qpos instead.
-  obj = SimpleNamespace(
-    is_fixed_base=False,
-    indexing=SimpleNamespace(free_joint_q_adr=[0, 1, 2, 3, 4, 5, 6]),
-    data=SimpleNamespace(
-      root_link_pos_w=torch.tensor([[0.0, 0.0, 1.3]]),  # stale
-      data=SimpleNamespace(qpos=torch.tensor([[0.0, 0.0, 0.8, 1.0, 0.0, 0.0, 0.0]])),
-    ),
+  torch.testing.assert_close(
+    object_tilt_deg(env, "object"), torch.tensor([0.0, 90.0]), atol=1e-4, rtol=0
   )
-  env = cast(
-    ManagerBasedRlEnv,
-    SimpleNamespace(scene={"object": obj}, num_envs=1, device="cpu"),
-  )
-  cfg = SimpleNamespace(params={"object_entity": "object", "success_height": 0.10})
-  lift_height = ObjectLiftHeight(cfg, env)
-  lift_success = LiftSuccess(cfg, env)
-  lift_height.reset()
-  lift_success.reset()
-  obj.data.root_link_pos_w[:, 2] = 0.91
-
-  torch.testing.assert_close(lift_height(env), torch.tensor([0.11]))
-  assert torch.equal(lift_success(env), torch.tensor([1.0]))
