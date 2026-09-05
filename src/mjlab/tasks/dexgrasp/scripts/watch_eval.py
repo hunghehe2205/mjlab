@@ -1,9 +1,9 @@
-"""Evaluate a training run's checkpoints as they appear and log them to W&B.
+"""Evaluate a training run's checkpoints as they appear; results stay local.
 
 Runs beside ``train`` on the same machine: one eval env is built once, every
 new ``model_<iter>.pt`` is scored with the scripted lift + hold protocol on a
-fixed pose set, for each finger mode, and the rows go to a JSON file and a
-W&B run named ``<run_dir>-eval``.
+fixed pose set, for each finger mode, and the rows are appended to a JSON file
+under ``<run_dir>/eval/``.
 """
 
 from __future__ import annotations
@@ -55,12 +55,8 @@ class WatchConfig:
   """Exit after this long without a new checkpoint."""
   settle_seconds: float = 15.0
   """Skip checkpoints modified more recently than this (still being written)."""
-  wandb_project: str | None = "mjlab-dexgrasp"
-  """W&B project; None disables logging."""
-  wandb_run_name: str | None = None
-  """W&B run name; defaults to ``<run_dir name>-eval``."""
   output_file: Path | None = None
-  """JSON rows; defaults to ``<run_dir>/eval/watch_eval.json``."""
+  """JSON rows; defaults to ``<run_dir>/eval/watch_eval_<object>.json``."""
   device: str | None = None
 
 
@@ -72,23 +68,10 @@ def main() -> None:
   cfg = tyro.cli(WatchConfig, config=mjlab.TYRO_FLAGS)
   configure_torch_backends()
   device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
-  out = cfg.output_file or cfg.run_dir / "eval" / "watch_eval.json"
+  out = cfg.output_file or cfg.run_dir / "eval" / f"watch_eval_{cfg.object_name}.json"
   out.parent.mkdir(parents=True, exist_ok=True)
   rows: list[dict] = json.loads(out.read_text()) if out.exists() else []
   done = {row["checkpoint"] for row in rows}
-
-  wandb_run = None
-  if cfg.wandb_project is not None:
-    import wandb
-
-    wandb_run = wandb.init(
-      project=cfg.wandb_project,
-      name=cfg.wandb_run_name or f"{cfg.run_dir.name}-eval",
-      config=asdict(cfg) | {"run_dir": str(cfg.run_dir)},
-      dir=str(cfg.run_dir),
-    )
-    wandb.define_metric("Eval/checkpoint")
-    wandb.define_metric("Eval/*", step_metric="Eval/checkpoint")
 
   env, vec_env = build_eval_env(cfg.object_name, cfg.num_envs, cfg.seed, device)
   runner = MjlabOnPolicyRunner(
@@ -120,7 +103,6 @@ def main() -> None:
         print(f"[WARN] could not load {ck.name}: {exc}", flush=True)
         continue
       row: dict = {"checkpoint": step}
-      log: dict[str, float] = {"Eval/checkpoint": float(step)}
       for mode in cfg.finger_modes:
         eval_cfg = EvaluateConfig(
           checkpoint=ck,
@@ -135,17 +117,12 @@ def main() -> None:
         )
         metrics = evaluate_policy(env, vec_env, policy, eval_cfg)
         row[mode] = metrics
-        log.update({f"Eval/{mode}/{k}": v for k, v in metrics.items()})
         print(format_metrics(f"model_{step} {mode}", metrics), flush=True)
       rows.append(row)
       done.add(step)
       out.write_text(json.dumps(rows, indent=1) + "\n")
-      if wandb_run is not None:
-        wandb_run.log(log)
       idle_since = time.time()
   vec_env.close()
-  if wandb_run is not None:
-    wandb_run.finish()
 
 
 if __name__ == "__main__":
