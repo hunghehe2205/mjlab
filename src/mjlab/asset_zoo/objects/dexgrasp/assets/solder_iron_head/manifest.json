@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/solder_iron_head",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "c69aab2d75d8d45de507deb80765606501adea99f95a8a1c1c2a4edcbf48e475",
+    "mesh": "2d6a20f3c58edb779c817ac768d48138fe58d68df53f9213cd032a557bf3f6b5"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.40395930995497986,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj",
+    "hull_007.obj",
+    "hull_008.obj",
+    "hull_009.obj",
+    "hull_010.obj",
+    "hull_011.obj",
+    "hull_012.obj",
+    "hull_013.obj",
+    "hull_014.obj",
+    "hull_015.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.058493,
+  "upstream_lowest_point": -0.058493,
+  "placement_lowest_point": -0.05849300299721958
+}

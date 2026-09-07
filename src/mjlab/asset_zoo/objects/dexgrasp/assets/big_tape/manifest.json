@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/big_tape",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "70f9bff2104a4609384522e9298b168ab1a1fd5fd9eddd130d97bd81e427235d",
+    "mesh": "20e526eb16f8d262e40527ae4fbd51eae24d3d65ad2b6b4c663dc54edab22d43"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.7643333736903541,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj",
+    "hull_007.obj",
+    "hull_008.obj",
+    "hull_009.obj",
+    "hull_010.obj",
+    "hull_011.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.029559,
+  "upstream_lowest_point": -0.029559,
+  "placement_lowest_point": -0.03046162987792492
+}

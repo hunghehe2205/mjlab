@@ -1,17 +1,17 @@
-"""DexGrasp object registry and the RobustDexGrasp 35-object training cohort.
+"""DexGrasp object registry: the RobustDexGrasp 35-object training cohort.
 
-All objects use one free body and one mesh collision geom so
-``VariantEntityCfg`` can select a geometry per parallel world. Each mesh has a
-200-point affordance cloud used by the teacher observations and pre-grasp
-reset. The cohort names are readable local names; ``ROBUST_DEXGRASP_SOURCES``
-records their exact names in the released RobustDexGrasp ``new_training_set``.
+Every object is one free body generated from its upstream URDF by
+``convert.py``: ``assets/<name>/object.xml`` with URDF inertia, a non-colliding
+visual mesh and convex collision parts. ``ROBUST_DEXGRASP_SOURCES`` maps the
+readable local names to the upstream ``new_training_set`` directories.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 import mujoco
 import numpy as np
@@ -21,76 +21,16 @@ from mjlab.entity.variants import VariantEntityCfg
 
 OBJECTS_DIR = Path(__file__).parent
 ASSETS_DIR = OBJECTS_DIR / "assets"
+SOURCE_MESH_FILE = "top_watertight_tiny.obj"
 
-# RobustDexGrasp URDF mass, uniform except for five identified-lighter objects below.
-OBJECT_MASS = 0.24875
-OBJECT_MASS_OVERRIDES = {
-  "scissors": 0.08626186684547055,
-  "small_block": 0.08340712944163264,
-  "large_clamp": 0.1695701014449372,
-  "off_water_body": 0.2049091757100137,
-  "extra_large_clamp": 0.2291035804273685,
-}
 # Tiny damping avoids MJWarp energy gain at high spin (hammer/scissors).
 OBJECT_FREE_JOINT_DAMPING = 1e-5
-# Matches table friction; elementwise-max pair friction is 0.2 vs table, 0.8 vs hand.
-OBJECT_FRICTION = 0.2
+# Slide matches the table; torsion/roll at MuJoCo defaults.
+OBJECT_FRICTION = (0.2, 0.005, 0.0001)
 OBJECT_RGBA = (0.85, 0.55, 0.25, 1.0)
 NUM_SURFACE_POINTS = 200
 
-# Meshed-primitive dimensions (graspable sizes); precompute.py exports the .obj.
-BOX_HALF_EXTENTS = (0.03, 0.03, 0.03)
-CYLINDER_RADIUS = 0.03
-CYLINDER_HALF_HEIGHT = 0.05
-
-# Kept for fast scene/debugging outside the baseline training cohort.
-DEBUG_OBJECT_NAMES = ("box", "cylinder")
 ROBUST_DEXGRASP_BASELINE_NUM_ENVS = 88
-
-# Exact RobustDexGrasp new_training_set cohort; oversampling handled below.
-ROBUST_DEXGRASP_TRAIN_OBJECTS = (
-  "master_chef_can",
-  "cracker_box",
-  "sugar_box",
-  "tomato_soup_can",
-  "mustard_bottle",
-  "tuna_fish_can",
-  "pudding_box",
-  "gelatin_box",
-  "box",
-  "potted_meat_can",
-  "banana",
-  "pitcher_base",
-  "bleach_cleanser",
-  "mug",
-  "power_drill",
-  "wood_block",
-  "scissors",
-  "large_clamp",
-  "extra_large_clamp",
-  "foam_brick",
-  "big_tape",
-  "blue_pitcher",
-  "brush_functional",
-  "car_down",
-  "cracker_box_oriented",
-  "fan_small_head",
-  "gun_functional",
-  "hammer",
-  "loopy_head_side",
-  "mouse",
-  "off_water_body",
-  "small_block",
-  "small_tape",
-  "solder_iron_head",
-  "sugar_box_oriented",
-  "wood_block_oriented",
-)
-
-# ``box`` is a local meshed primitive, not an object from the source cohort.
-ROBUST_DEXGRASP_TRAIN_OBJECTS = tuple(
-  name for name in ROBUST_DEXGRASP_TRAIN_OBJECTS if name != "box"
-)
 
 ROBUST_DEXGRASP_SOURCES = {
   "master_chef_can": "002_master_chef_can",
@@ -130,91 +70,101 @@ ROBUST_DEXGRASP_SOURCES = {
   "wood_block_oriented": "wood_block_oriented",
 }
 
-OBJECT_NAMES = DEBUG_OBJECT_NAMES + ROBUST_DEXGRASP_TRAIN_OBJECTS
-
-
-def get_mesh_object_spec(name: str) -> mujoco.MjSpec:
-  """One free mesh collision body."""
-  spec = mujoco.MjSpec()
-  spec.add_material(name="object", rgba=OBJECT_RGBA)
-  spec.meshdir = str(ASSETS_DIR / name)
-  spec.add_mesh(name="object_mesh", file="collision.obj")
-  body = spec.worldbody.add_body(name="object")
-  joint = body.add_freejoint(name="object_joint")
-  joint.damping = np.full(3, OBJECT_FREE_JOINT_DAMPING)
-  geom = body.add_geom()
-  geom.name = "object_collision"
-  geom.type = mujoco.mjtGeom.mjGEOM_MESH
-  geom.meshname = "object_mesh"
-  geom.mass = OBJECT_MASS_OVERRIDES.get(name, OBJECT_MASS)
-  geom.friction[0] = OBJECT_FRICTION
-  geom.material = "object"
-  return spec
-
-
-# Primitives know their lowest point analytically; meshes read the YCB txt.
-_PRIMITIVE_LOWEST = {"box": -BOX_HALF_EXTENTS[2], "cylinder": -CYLINDER_HALF_HEIGHT}
-
-
-def _read_lowest_point(name: str) -> float:
-  if name in _PRIMITIVE_LOWEST:
-    return _PRIMITIVE_LOWEST[name]
-  path = ASSETS_DIR / name / "lowest_point.txt"
-  if path.exists():
-    return float(path.read_text().strip())
-  mesh = trimesh.load_mesh(str(ASSETS_DIR / name / "collision.obj"))
-  if isinstance(mesh, trimesh.Scene):
-    mesh = mesh.dump(concatenate=True)
-  assert isinstance(mesh, trimesh.Trimesh)
-  return float(mesh.vertices[:, 2].min())
+ROBUST_DEXGRASP_TRAIN_OBJECTS = tuple(ROBUST_DEXGRASP_SOURCES)
+OBJECT_NAMES = ROBUST_DEXGRASP_TRAIN_OBJECTS
 
 
 @dataclass(frozen=True)
 class DexGraspObject:
-  """A Phase 1 grasp object plus its table-placement offset."""
+  """One converted grasp object and its generated files."""
 
   name: str
-  spec_fn: Callable[[], mujoco.MjSpec]
 
   @property
-  def lowest_point(self) -> float:
-    """Min-z in object frame; place at table_z - lowest_point.
+  def asset_dir(self) -> Path:
+    return ASSETS_DIR / self.name
 
-    Read lazily (not at registry build) so importing this module needs no asset;
-    building an env cfg that places the object still reads it.
-    """
-    return _read_lowest_point(self.name)
+  @property
+  def source_urdf_path(self) -> Path:
+    return self.asset_dir / "source" / f"{ROBUST_DEXGRASP_SOURCES[self.name]}.urdf"
+
+  @property
+  def source_mesh_path(self) -> Path:
+    return self.asset_dir / "source" / SOURCE_MESH_FILE
+
+  @property
+  def xml_path(self) -> Path:
+    return self.asset_dir / "object.xml"
+
+  @property
+  def manifest_path(self) -> Path:
+    return self.asset_dir / "manifest.json"
 
   @property
   def npz_path(self) -> Path:
-    return ASSETS_DIR / f"{self.name}.npz"
+    return self.asset_dir / "surface.npz"
+
+  def load_manifest(self) -> dict:
+    """Manifest, validated against the source files it was built from.
+
+    Checked on every load: replacing a source mesh while keeping old hulls
+    silently corrupts contact geometry, which is far harder to diagnose than a
+    load failure.
+    """
+    manifest = json.loads(self.manifest_path.read_text())
+    digests = manifest["source_sha256"]
+    for key, path in (("urdf", self.source_urdf_path), ("mesh", self.source_mesh_path)):
+      if digests[key] != hashlib.sha256(path.read_bytes()).hexdigest():
+        raise ValueError(f"Stale assets for {self.name}: {key} changed; rerun convert")
+    missing = [
+      f for f in manifest["hulls"] if not (self.asset_dir / "collision" / f).is_file()
+    ]
+    if not manifest["hulls"] or missing:
+      raise FileNotFoundError(f"Incomplete collision assets for {self.name}: {missing}")
+    return manifest
+
+  @property
+  def lowest_point(self) -> float:
+    """Min z of the source mesh in the object frame."""
+    return float(self.load_manifest()["lowest_point"])
+
+  @property
+  def placement_lowest_point(self) -> float:
+    """Min z of the collision hulls; place at ``table_z - placement_lowest_point``."""
+    return float(self.load_manifest()["placement_lowest_point"])
+
+  def spec_fn(self) -> mujoco.MjSpec:
+    """Load ``object.xml`` with absolute mesh paths.
+
+    Absolute because ``VariantEntityCfg`` copies every variant's meshes into one
+    template spec, which resolves relative paths against a single directory.
+    """
+    self.load_manifest()
+    spec = mujoco.MjSpec.from_file(str(self.xml_path))
+    for mesh in spec.meshes:
+      mesh.file = str(self.asset_dir / mesh.file)
+    return spec
 
   def load_surface_points(self) -> np.ndarray:
-    """(200, 3) affordance cloud in object frame."""
+    """(200, 3) affordance cloud in the object frame."""
     return np.load(self.npz_path)["points"]
 
   def load_affordance_mesh(self) -> trimesh.Trimesh:
-    """Convex-hull mesh (object frame) for the pre-grasp visibility raycast.
-
-    Returns the hull, not the raw mesh: MuJoCo collides with the hull and the
-    affordance cloud is sampled on it, so camera rays must hit the hull too --
-    on the raw mesh, concavities make ~6% of rays miss.
-    """
-    mesh = trimesh.load_mesh(str(ASSETS_DIR / self.name / "collision.obj"))
+    """The upstream watertight surface (visibility and affordance queries)."""
+    mesh = trimesh.load_mesh(str(self.source_mesh_path), process=False)
     if isinstance(mesh, trimesh.Scene):
       mesh = mesh.dump(concatenate=True)
     assert isinstance(mesh, trimesh.Trimesh)
-    return mesh.convex_hull
+    return mesh
 
 
-def _build_registry() -> dict[str, DexGraspObject]:
-  return {
-    name: DexGraspObject(name, lambda n=name: get_mesh_object_spec(n))
-    for name in OBJECT_NAMES
-  }
+def get_mesh_object_spec(name: str) -> mujoco.MjSpec:
+  return DexGraspObject(name).spec_fn()
 
 
-PHASE1_OBJECTS: dict[str, DexGraspObject] = _build_registry()
+PHASE1_OBJECTS: dict[str, DexGraspObject] = {
+  name: DexGraspObject(name) for name in OBJECT_NAMES
+}
 
 
 def get_phase1_variant_cfg(

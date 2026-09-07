@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/036_wood_block",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "04b6892ec28d1a16c491f7cf7389b7bfa783c1c5e81a99ef31f3ae85201b8a7c",
+    "mesh": "c90158df9559e708bcc821634f902902b5164b116080086fa63fb2a6e8b5c829"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9896934074917181,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.120051,
+  "upstream_lowest_point": -0.120051,
+  "placement_lowest_point": -0.120051
+}

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/mouse",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "76b2d310a4c9ea0c12372bcb4f275c57678753d8dd1de65243a7980ca1c7a901",
+    "mesh": "d85d57421059328e1dbca9ee1eebb0a2102bbbb554a410e25edf2c81db66e5fe"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9687835598597024,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.019992,
+  "upstream_lowest_point": -0.019992,
+  "placement_lowest_point": -0.019992
+}

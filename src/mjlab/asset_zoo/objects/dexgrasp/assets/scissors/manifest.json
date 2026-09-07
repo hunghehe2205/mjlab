@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/037_scissors",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "756af69a670f568eb0089c85c1016f2fa7e31fde89746d0f4ecbc41bbd631d32",
+    "mesh": "929f6120536698b9927b358505c4e295055edf33764f9d7a8ac06544b50d51bc"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.36527667720638535,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj",
+    "hull_007.obj",
+    "hull_008.obj",
+    "hull_009.obj",
+    "hull_010.obj",
+    "hull_011.obj",
+    "hull_012.obj",
+    "hull_013.obj",
+    "hull_014.obj"
+  ],
+  "mass": 0.08626186684547055,
+  "lowest_point": -0.007741,
+  "upstream_lowest_point": -0.007741,
+  "placement_lowest_point": -0.007740999949097632
+}

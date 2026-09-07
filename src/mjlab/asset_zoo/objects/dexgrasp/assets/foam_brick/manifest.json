@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/061_foam_brick",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "9cbefe9477501369eb0ed7db93961bc22fda521f7fbd4e57e700b0ef9c998e14",
+    "mesh": "5fef80f9554e19e2a9ec426253054c382ebcbe65a2b5aba989844110435a9c6e"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9518726865904402,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.017157,
+  "upstream_lowest_point": -0.017157,
+  "placement_lowest_point": -0.017157
+}

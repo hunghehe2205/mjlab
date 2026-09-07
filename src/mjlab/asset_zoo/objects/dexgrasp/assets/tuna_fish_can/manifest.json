@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/007_tuna_fish_can",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "9bec0d416d11de0f46c62be4bc3a454df879f7287a43fdd8a23d91cab2d98108",
+    "mesh": "505ba9428559b66430c2be43d958b6f689b48e53da4c6ec7ae8a0498f4659d1f"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.8365558134953166,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj",
+    "hull_007.obj",
+    "hull_008.obj",
+    "hull_009.obj",
+    "hull_010.obj",
+    "hull_011.obj",
+    "hull_012.obj",
+    "hull_013.obj",
+    "hull_014.obj",
+    "hull_015.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.020777,
+  "upstream_lowest_point": -0.020777,
+  "placement_lowest_point": -0.02077699894705415
+}

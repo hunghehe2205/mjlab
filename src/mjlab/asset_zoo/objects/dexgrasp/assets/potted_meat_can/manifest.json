@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/010_potted_meat_can",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "a6dbf7662ee793037e0bd408fca46a0067d8bf5511ccec93a5ad9d6caa09c354",
+    "mesh": "8e8f1eb9b418b55f56fa77de55071211b640ae9396e9d5c314c953ba3c75e095"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.8589825312369714,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj",
+    "hull_007.obj",
+    "hull_008.obj",
+    "hull_009.obj",
+    "hull_010.obj",
+    "hull_011.obj",
+    "hull_012.obj",
+    "hull_013.obj",
+    "hull_014.obj",
+    "hull_015.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.049662,
+  "upstream_lowest_point": -0.049662,
+  "placement_lowest_point": -0.0496620000872612
+}

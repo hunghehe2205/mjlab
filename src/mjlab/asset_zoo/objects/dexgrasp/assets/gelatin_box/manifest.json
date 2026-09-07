@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/009_gelatin_box",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "8228a325a82c97a41945bdc0226929eb7dc1a22d018ae88db6e6603bf5b03785",
+    "mesh": "9c21cfeb25bbb5e5439b3d90cf2cff3fc9973ad99fbffe3438a53c7eec960dda"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9763511588998005,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.01853,
+  "upstream_lowest_point": -0.01853,
+  "placement_lowest_point": -0.01853
+}

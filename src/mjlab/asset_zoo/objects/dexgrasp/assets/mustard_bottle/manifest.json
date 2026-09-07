@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/006_mustard_bottle",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "9e7f0bb4ec5c7ee4a42c7a61f9c08889249e99a79787be799347ad7488b68cec",
+    "mesh": "d7e2761a1359ce8472d14f4fe30f7665d75b52c4b12dd2e3908d6c97a622290a"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.8758250615774252,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.084036,
+  "upstream_lowest_point": -0.084036,
+  "placement_lowest_point": -0.08403599428138137
+}

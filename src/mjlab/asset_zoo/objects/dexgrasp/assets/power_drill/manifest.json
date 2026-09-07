@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/035_power_drill",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "7872c7d0cc0065cbe30c447711bb1744c7f796c7a2fed496289e5b2d1e8962b3",
+    "mesh": "f1d3bef5a16457f0acb1b3a9ec9dcd02b51e6afc5fb0cedcbf760ffcaa0bf2b2"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.0,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj"
+  ],
+  "mass": 0.2487500000000001,
+  "lowest_point": -0.1146,
+  "upstream_lowest_point": -0.1146,
+  "placement_lowest_point": -0.11553799663895369
+}

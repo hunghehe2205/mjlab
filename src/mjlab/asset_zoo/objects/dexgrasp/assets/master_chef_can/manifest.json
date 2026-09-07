@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/002_master_chef_can",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "bc632c481921b0b5308015388f79ce0ed6d6d7d14623f5ea110aa42fba1aa6b9",
+    "mesh": "6f85d4e48915b0d6114a67d05d4d3f04efc239496628586d530dc3809f3e41f7"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9379517578145347,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.073267,
+  "upstream_lowest_point": -0.073267,
+  "placement_lowest_point": -0.073267
+}

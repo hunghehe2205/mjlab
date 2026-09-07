@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/052_extra_large_clamp",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "70c55f777f69146ba00f640f9c6eb7f2941eafdfdadf5da5b63abf0a4b1979b3",
+    "mesh": "70ec87472ef9817fe8fa42aa18aa6373f39306e1424c4bc1d4942164af29be22"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.0,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj",
+    "hull_007.obj",
+    "hull_008.obj",
+    "hull_009.obj",
+    "hull_010.obj",
+    "hull_011.obj",
+    "hull_012.obj",
+    "hull_013.obj",
+    "hull_014.obj",
+    "hull_015.obj"
+  ],
+  "mass": 0.2291035804273685,
+  "lowest_point": -0.01816,
+  "upstream_lowest_point": -0.01816,
+  "placement_lowest_point": -0.01923776836808026
+}

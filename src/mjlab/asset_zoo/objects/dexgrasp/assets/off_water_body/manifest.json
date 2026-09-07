@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/off_water_body",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "0a765805ddc055ddc19cfb13116d0ed250e01d8ac3f9f89e492e48798a729090",
+    "mesh": "df0d5f74726a2d8be74b4fa11b8c103ccc35fc4c4dae61bdf50e8c4b541ef7f0"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9405609485885654,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.2049091757100137,
+  "lowest_point": -0.015991,
+  "upstream_lowest_point": -0.015991,
+  "placement_lowest_point": -0.015991
+}

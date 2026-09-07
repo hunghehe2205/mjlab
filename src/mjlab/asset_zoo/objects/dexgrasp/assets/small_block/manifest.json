@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/small_block",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "dd82f25aca05e0b173b323d0fa319aff10b4f3b2750fa8676e057ec5877efa09",
+    "mesh": "f860595098e8ce0d2236390e92ce28c31009872dfc90defc1894b3a03b428db4"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9897019206792487,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.08340712944163264,
+  "lowest_point": -0.036015,
+  "upstream_lowest_point": -0.036015,
+  "placement_lowest_point": -0.036015
+}

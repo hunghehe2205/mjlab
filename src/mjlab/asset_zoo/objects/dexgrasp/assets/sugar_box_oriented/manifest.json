@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/suger_box_oriented",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "327755d526b8a3f147965254c6e62511f9a93cb230b6f156aa63ecf0fd7c11cf",
+    "mesh": "f40c1daee68f3efa77b03b25020403c5db22313b11b95c120d9729447130e66a"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9724972395022417,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.048038,
+  "upstream_lowest_point": -0.048038,
+  "placement_lowest_point": -0.048038
+}

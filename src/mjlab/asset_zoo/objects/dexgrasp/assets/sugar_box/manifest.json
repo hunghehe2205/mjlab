@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/004_sugar_box",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "8262277a0a709d69fcffe550235401eacab57bc5336973830136a6f3eaad9328",
+    "mesh": "5ee7ba5d9d2a9849e0acded9d62a7ff266d26797ec6e5b68b8f133d7cfb6bf52"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9724416454311525,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.092346,
+  "upstream_lowest_point": -0.092346,
+  "placement_lowest_point": -0.092346
+}

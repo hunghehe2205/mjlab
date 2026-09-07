@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/fan_small_head",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "3fa27b402298f9b6a01d323b4118829c416ccd6a29cf978377f0eb1a0a15ba19",
+    "mesh": "f2a782d6e9594d5d8d3709719d073c647a3af4169d6e7526c1e33cd206d52187"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.7319261795936184,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.03066,
+  "upstream_lowest_point": -0.03066,
+  "placement_lowest_point": -0.03065999941334128
+}

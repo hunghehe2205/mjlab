@@ -1,0 +1,18 @@
+<mujoco model="gelatin_box">
+  <compiler angle="radian"/>
+
+  <asset>
+    <material name="object" rgba="0.85 0.55 0.25 1"/>
+    <mesh name="object_visual_mesh" file="source/top_watertight_tiny.obj"/>
+    <mesh name="object_collision_mesh_000" file="collision/hull_000.obj"/>
+  </asset>
+
+  <worldbody>
+    <body name="object">
+      <inertial pos="-0.00133039 0.000826311 -0.00423028" quat="0.439344 0.555312 -0.440644 0.551759" mass="0.24875" diaginertia="0.00025899 0.000169962 0.00012062"/>
+      <joint name="object_joint" type="free" damping="1e-05 1e-05 1e-05"/>
+      <geom name="object_visual" type="mesh" contype="0" conaffinity="0" mass="0" material="object" rgba="1 0.423529 0.0392157 1" mesh="object_visual_mesh"/>
+      <geom name="object_collision" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_000"/>
+    </body>
+  </worldbody>
+</mujoco>

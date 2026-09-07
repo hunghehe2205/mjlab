@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/cracker_box_oriented",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "8c1e879e601ed06cdc0ac6787e50f5503d7fc5713beb4fcefb647a4ee6e79211",
+    "mesh": "6d96b6d34bc68f3563c2538899245cfa14f1404165c521f1fbb54d95afd5da85"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9473564117464742,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.083624,
+  "upstream_lowest_point": -0.083624,
+  "placement_lowest_point": -0.083624
+}

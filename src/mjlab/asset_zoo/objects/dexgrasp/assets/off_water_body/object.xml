@@ -1,0 +1,18 @@
+<mujoco model="off_water_body">
+  <compiler angle="radian"/>
+
+  <asset>
+    <material name="object" rgba="0.85 0.55 0.25 1"/>
+    <mesh name="object_visual_mesh" file="source/top_watertight_tiny.obj"/>
+    <mesh name="object_collision_mesh_000" file="collision/hull_000.obj"/>
+  </asset>
+
+  <worldbody>
+    <body name="object">
+      <inertial pos="0.00514917 -0.00115078 0.000421851" quat="0.0780135 0.707201 0.0593255 0.700187" mass="0.204909" diaginertia="0.000247194 0.000237471 3.09726e-05"/>
+      <joint name="object_joint" type="free" damping="1e-05 1e-05 1e-05"/>
+      <geom name="object_visual" type="mesh" contype="0" conaffinity="0" mass="0" material="object" rgba="1 0.423529 0.0392157 1" mesh="object_visual_mesh"/>
+      <geom name="object_collision" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_000"/>
+    </body>
+  </worldbody>
+</mujoco>

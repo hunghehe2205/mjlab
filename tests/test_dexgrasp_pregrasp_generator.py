@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import trimesh
 
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.asset_zoo.robots.ur5e_rh5dg2 import ur5e_rh5dg2_constants as rc
@@ -26,16 +25,10 @@ from mjlab.tasks.dexgrasp.pregrasp.pose_sampler import sample_object_pose
 TABLE_TOP_Z = 0.771
 
 
-def _load_mesh(name: str) -> trimesh.Trimesh:
-  mesh = trimesh.load_mesh(str(oc.ASSETS_DIR / name / "collision.obj"))
-  assert isinstance(mesh, trimesh.Trimesh)
-  return mesh
-
-
 def test_generate_pregrasp_places_grasp_center_toward_camera():
   name = "potted_meat_can"
   obj = oc.PHASE1_OBJECTS[name]
-  mesh = _load_mesh(name)
+  mesh = obj.load_affordance_mesh()
   pcd = obj.load_surface_points()
   kin = ArmKinematics(mount_pos=(0.0, 0.0, TABLE_TOP_Z))
   home = rc.HOME_KEYFRAME.joint_pos or {}

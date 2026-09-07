@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/hammer",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "5be5c671980d2ca1e2721e9a0dcf709e9c0a0cdf6b21040bee006eb0eb4cb7ef",
+    "mesh": "4e22d6e1004ca58703bd8d293a5eee2089ee04648e36e9ef767eeae67d0c2a46"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.42136293460179036,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.031293,
+  "upstream_lowest_point": -0.031293,
+  "placement_lowest_point": -0.0312929965890199
+}

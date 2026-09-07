@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/011_banana",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "9d2ea59ac966451be51e5fd7b8851eab81268e89e340de7a09b4c88544f76b73",
+    "mesh": "98cbc64e82265399a2cf38a4eae3763b7b6ced553417fba71b9ffe13e6663182"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.6518797427068638,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.016734,
+  "upstream_lowest_point": -0.016734,
+  "placement_lowest_point": -0.016733999481499194
+}

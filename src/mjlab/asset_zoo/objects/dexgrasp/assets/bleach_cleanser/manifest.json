@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/021_bleach_cleanser",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "459d9ca3c93d50a625cd8b619826720f19bd715ee670dc9ed6d1bc881bd90109",
+    "mesh": "55888655ecaec6e61ea0ff1dec46db266457beaf1b100af631f6ba1e230df135"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9100945671835906,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.112054,
+  "upstream_lowest_point": -0.112054,
+  "placement_lowest_point": -0.112054
+}

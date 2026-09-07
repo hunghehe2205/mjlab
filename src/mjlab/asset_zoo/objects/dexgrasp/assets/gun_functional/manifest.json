@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/gun_functional",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "ba4982dd2ae64f88149b3d8585d01448b9a8c054500811d2a5b98f3374316421",
+    "mesh": "b56ecd80fd3642334e0c6c877c529b5390baa7418993e407c7b785a5f449100e"
+  },
+  "coacd": {
+    "threshold": 0.05,
+    "max_convex_hull": 16,
+    "resolution": 2000,
+    "max_ch_vertex": 128,
+    "seed": 0
+  },
+  "convex_ratio": 0.0,
+  "hulls": [
+    "hull_000.obj",
+    "hull_001.obj",
+    "hull_002.obj",
+    "hull_003.obj",
+    "hull_004.obj",
+    "hull_005.obj",
+    "hull_006.obj",
+    "hull_007.obj",
+    "hull_008.obj",
+    "hull_009.obj",
+    "hull_010.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.028415,
+  "upstream_lowest_point": -0.028415,
+  "placement_lowest_point": -0.030165515546232462
+}

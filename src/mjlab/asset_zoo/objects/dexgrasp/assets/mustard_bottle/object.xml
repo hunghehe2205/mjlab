@@ -1,0 +1,24 @@
+<mujoco model="mustard_bottle">
+  <compiler angle="radian"/>
+
+  <asset>
+    <material name="object" rgba="0.85 0.55 0.25 1"/>
+    <mesh name="object_visual_mesh" file="source/top_watertight_tiny.obj"/>
+    <mesh name="object_collision_mesh_000" file="collision/hull_000.obj"/>
+    <mesh name="object_collision_mesh_001" file="collision/hull_001.obj"/>
+    <mesh name="object_collision_mesh_002" file="collision/hull_002.obj"/>
+    <mesh name="object_collision_mesh_003" file="collision/hull_003.obj"/>
+  </asset>
+
+  <worldbody>
+    <body name="object">
+      <inertial pos="-0.000969788 -0.00208719 -0.0057025" quat="0.833585 -0.000973945 0.00353588 0.552379" mass="0.24875" diaginertia="0.000674143 0.000587465 0.000173317"/>
+      <joint name="object_joint" type="free" damping="1e-05 1e-05 1e-05"/>
+      <geom name="object_visual" type="mesh" contype="0" conaffinity="0" mass="0" material="object" rgba="1 0.423529 0.0392157 1" mesh="object_visual_mesh"/>
+      <geom name="object_collision" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_000"/>
+      <geom name="object_collision_001" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_001"/>
+      <geom name="object_collision_002" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_002"/>
+      <geom name="object_collision_003" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_003"/>
+    </body>
+  </worldbody>
+</mujoco>

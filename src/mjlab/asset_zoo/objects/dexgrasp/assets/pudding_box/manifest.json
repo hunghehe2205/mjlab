@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "upstream": {
+    "repo": "https://github.com/zdchan/RobustDexGrasp",
+    "path": "rsc/new_training_set/008_pudding_box",
+    "commit": "ce4f7bc6c12abda5f42e5a19483f68337b06d85e"
+  },
+  "source_sha256": {
+    "urdf": "c01df7e7ef669c8dce19e5a5b10001f5169836ec054dfe18e824ae216624e296",
+    "mesh": "1524a1b86fadba79c24ea2ecaeeadda531c1e00cc25a9626042a904e57fcfc7a"
+  },
+  "coacd": null,
+  "convex_ratio": 0.9796240505904242,
+  "hulls": [
+    "hull_000.obj"
+  ],
+  "mass": 0.24875,
+  "lowest_point": -0.022346,
+  "upstream_lowest_point": -0.022346,
+  "placement_lowest_point": -0.022346
+}

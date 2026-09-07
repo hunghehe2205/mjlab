@@ -1,0 +1,48 @@
+<mujoco model="tomato_soup_can">
+  <compiler angle="radian"/>
+
+  <asset>
+    <material name="object" rgba="0.85 0.55 0.25 1"/>
+    <mesh name="object_visual_mesh" file="source/top_watertight_tiny.obj"/>
+    <mesh name="object_collision_mesh_000" file="collision/hull_000.obj"/>
+    <mesh name="object_collision_mesh_001" file="collision/hull_001.obj"/>
+    <mesh name="object_collision_mesh_002" file="collision/hull_002.obj"/>
+    <mesh name="object_collision_mesh_003" file="collision/hull_003.obj"/>
+    <mesh name="object_collision_mesh_004" file="collision/hull_004.obj"/>
+    <mesh name="object_collision_mesh_005" file="collision/hull_005.obj"/>
+    <mesh name="object_collision_mesh_006" file="collision/hull_006.obj"/>
+    <mesh name="object_collision_mesh_007" file="collision/hull_007.obj"/>
+    <mesh name="object_collision_mesh_008" file="collision/hull_008.obj"/>
+    <mesh name="object_collision_mesh_009" file="collision/hull_009.obj"/>
+    <mesh name="object_collision_mesh_010" file="collision/hull_010.obj"/>
+    <mesh name="object_collision_mesh_011" file="collision/hull_011.obj"/>
+    <mesh name="object_collision_mesh_012" file="collision/hull_012.obj"/>
+    <mesh name="object_collision_mesh_013" file="collision/hull_013.obj"/>
+    <mesh name="object_collision_mesh_014" file="collision/hull_014.obj"/>
+    <mesh name="object_collision_mesh_015" file="collision/hull_015.obj"/>
+  </asset>
+
+  <worldbody>
+    <body name="object">
+      <inertial pos="-0.000433971 0.00179528 -0.00929583" quat="0.694997 0.00342163 0.00100402 0.719004" mass="0.24875" diaginertia="0.000249834 0.00024796 0.000135219"/>
+      <joint name="object_joint" type="free" damping="1e-05 1e-05 1e-05"/>
+      <geom name="object_visual" type="mesh" contype="0" conaffinity="0" mass="0" material="object" rgba="1 0.423529 0.0392157 1" mesh="object_visual_mesh"/>
+      <geom name="object_collision" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_000"/>
+      <geom name="object_collision_001" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_001"/>
+      <geom name="object_collision_002" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_002"/>
+      <geom name="object_collision_003" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_003"/>
+      <geom name="object_collision_004" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_004"/>
+      <geom name="object_collision_005" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_005"/>
+      <geom name="object_collision_006" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_006"/>
+      <geom name="object_collision_007" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_007"/>
+      <geom name="object_collision_008" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_008"/>
+      <geom name="object_collision_009" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_009"/>
+      <geom name="object_collision_010" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_010"/>
+      <geom name="object_collision_011" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_011"/>
+      <geom name="object_collision_012" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_012"/>
+      <geom name="object_collision_013" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_013"/>
+      <geom name="object_collision_014" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_014"/>
+      <geom name="object_collision_015" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_015"/>
+    </body>
+  </worldbody>
+</mujoco>

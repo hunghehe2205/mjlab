@@ -1,0 +1,18 @@
+<mujoco model="wood_block_oriented">
+  <compiler angle="radian"/>
+
+  <asset>
+    <material name="object" rgba="0.85 0.55 0.25 1"/>
+    <mesh name="object_visual_mesh" file="source/top_watertight_tiny.obj"/>
+    <mesh name="object_collision_mesh_000" file="collision/hull_000.obj"/>
+  </asset>
+
+  <worldbody>
+    <body name="object">
+      <inertial pos="-0.00223617 0.0173743 0.00169146" quat="0.538105 0.538267 -0.461734 0.455537" mass="0.24875" diaginertia="0.00102793 0.00102259 0.000318077"/>
+      <joint name="object_joint" type="free" damping="1e-05 1e-05 1e-05"/>
+      <geom name="object_visual" type="mesh" contype="0" conaffinity="0" mass="0" material="object" rgba="1 0.423529 0.0392157 1" mesh="object_visual_mesh"/>
+      <geom name="object_collision" type="mesh" condim="6" friction="0.2" mass="0" material="object" mesh="object_collision_mesh_000"/>
+    </body>
+  </worldbody>
+</mujoco>
