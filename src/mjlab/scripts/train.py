@@ -35,6 +35,11 @@ class TrainConfig:
   wandb_run_path: str | None = None
   wandb_checkpoint_name: str | None = None
   """Optional checkpoint name within the W&B run to load (e.g. 'model_4000.pt')."""
+  warmstart_checkpoint: str | None = None
+  """Load only weights + obs normalizer from this checkpoint, with a fresh
+  optimizer, LR schedule, and iteration counter. For curriculum phase
+  transitions where the object/reward distribution shifts. Ignored when the
+  agent is resuming (full continue)."""
   gpu_ids: list[int] | Literal["all"] | None = field(default_factory=lambda: [0])
 
   @staticmethod
@@ -134,6 +139,22 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
   if resume_path is not None:
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     runner.load(str(resume_path))
+  elif cfg.warmstart_checkpoint is not None:
+    print(
+      f"[INFO]: Warm-starting weights + obs normalizer (fresh optimizer, LR, "
+      f"iteration) from: {cfg.warmstart_checkpoint}"
+    )
+    runner.load(
+      cfg.warmstart_checkpoint,
+      load_cfg={
+        "actor": True,
+        "critic": True,
+        "optimizer": False,
+        "iteration": False,
+        "rnd": False,
+      },
+      map_location=device,
+    )
 
   runner.learn(
     num_learning_iterations=cfg.agent.max_iterations, init_at_random_ep_len=True

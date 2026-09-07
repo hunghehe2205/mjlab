@@ -19,7 +19,7 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
         "class_name": "GaussianDistribution",
         "init_std": 1.0,
         "std_type": "scalar",
-        "std_range": (0.2, 1.0e6),
+        "std_range": (0.1, 1.0),  # Cap runaway std; floor for fine control.
       },
     ),
     critic=RslRlModelCfg(
@@ -31,7 +31,7 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
       value_loss_coef=0.5,
       use_clipped_value_loss=True,
       clip_param=0.2,
-      entropy_coef=0.0,
+      entropy_coef=0.005,  # mjlab-native exploration; matters for cold-start Phase 3.
       num_learning_epochs=4,
       # Reference: 4 minibatches, adaptive LR targeting desired_kl.
       num_mini_batches=4,
@@ -45,6 +45,6 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
     experiment_name="dexgrasp_teacher_ur5e_rh5dg2",
     obs_groups={"actor": ("actor",), "critic": ("actor",)},
     save_interval=100,
-    num_steps_per_env=70,  # Full-episode rollout per update (reference).
+    num_steps_per_env=32,  # Short horizon; GAE bootstraps across the 70-step episode.
     max_iterations=10_000,
   )

@@ -56,6 +56,10 @@ OBJECT_WORKSPACE_BOUNDS = (
   (TABLE_TOP_Z - 0.05, TABLE_TOP_Z + 0.50),
 )
 
+# GPU training default (probed on RTX 3060: throughput knee ~1024-2048 envs).
+# Override with --env.scene.num-envs; bump toward 2048 for final long runs.
+TRAIN_NUM_ENVS = 1024
+
 
 def get_dexgrasp_robot_cfg() -> EntityCfg:
   """UR5e + RH5-DG2 with its base raised onto the pedestal.
@@ -233,8 +237,8 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   if play and len(selected_object_names) > 1:
     selected_object_names = (SKELETON_OBJECT,)
   cfg.scene.entities["object"] = get_dexgrasp_object_cfg(selected_object_names)
-  if object_name is None and object_names is None and not play:
-    cfg.scene.num_envs = oc.ROBUST_DEXGRASP_BASELINE_NUM_ENVS
+  if not play:
+    cfg.scene.num_envs = TRAIN_NUM_ENVS
   cfg.scene.sensors = cfg.scene.sensors + (
     mdp.pad_object_sensor(),
     mdp.link_object_sensor(),
