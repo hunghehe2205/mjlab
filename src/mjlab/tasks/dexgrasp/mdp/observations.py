@@ -1,9 +1,8 @@
-"""DexGrasp teacher observation terms (Phase 1 §E).
+"""DexGrasp teacher observation terms, native MuJoCo sensing.
 
-Layout mirrors the reference environment: absolute qpos, PD error, per-body
-contact flags + accumulated impulse magnitudes, keypoint/arm-link heights above
-the table, hand center position, unwrapped wrist euler and the init-relative
-wrist euler, plus the hand-centric affordance distance vectors (af_vec).
+Absolute qpos, PD error, pad contact flags + force magnitudes, per-link contact
+flags, keypoint/arm-link heights above the table, hand center, wrist frame axes,
+and the hand-centric affordance distance vectors (af_vec).
 """
 
 from __future__ import annotations
@@ -16,62 +15,28 @@ import torch
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.sensor import ContactSensor
-from mjlab.tasks.dexgrasp.rotations import euler_from_rotmat, unwrap_euler
+from mjlab.tasks.dexgrasp.mdp.contacts import contact_flags, contact_force
 from mjlab.utils.lab_api.math import matrix_from_quat, quat_apply, quat_inv
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
+  from mjlab.sensor import ContactSensor
 
 __all__ = [
-  "SKIP_IMPULSE",
-  "FLAG_IMPULSE",
-  "sensor_impulse",
   "joint_pos",
   "pd_error",
   "link_heights",
   "hand_center_pos",
-  "HandObjectContacts",
-  "WristOrientation",
+  "wrist_rot",
+  "PadContactObs",
+  "LinkContactObs",
   "nearest_affordance_points",
   "keypoint_min_distances",
   "compute_af_vec",
   "AffordanceVectors",
 ]
 
-# Impulse thresholds (N*s): drop below SKIP_IMPULSE, flag contact above FLAG_IMPULSE.
-SKIP_IMPULSE = 0.001
-FLAG_IMPULSE = 0.01
-# Reference impulse window: RaiSim reports the impulse of one 10 ms sim step. The
-# thresholds above are tuned to that scale, so it must not follow SIM_TIMESTEP.
-REFERENCE_IMPULSE_DT = 0.01
-
 _DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
-
-
-def sensor_impulse(
-  sensor: ContactSensor,
-  dt: float,
-  pad_parents: tuple[int, ...] | None = None,
-) -> torch.Tensor:
-  """Mean net force over the control step x ``dt`` (B, P, 3).
-
-  The reference reads one 10 ms sim step's contact impulse after the substep
-  loop; averaging the net-force history over the substeps and scaling by
-  ``dt = REFERENCE_IMPULSE_DT`` reproduces that scale regardless of the sim
-  timestep. With ``pad_parents``, the trailing pad slots are vector-summed into
-  their parent body slots (the reference merges welded pad links).
-  """
-  history = sensor.data.force_history
-  assert history is not None
-  impulse = history.mean(dim=2) * dt
-  if pad_parents is not None:
-    n_pads = len(pad_parents)
-    base = impulse[:, :-n_pads].clone()
-    idx = torch.as_tensor(pad_parents, dtype=torch.long, device=impulse.device)
-    base.index_add_(1, idx, impulse[:, -n_pads:])
-    impulse = base
-  return impulse
 
 
 def joint_pos(
@@ -122,63 +87,41 @@ def hand_center_pos(
   return world_pos - env.scene.env_origins
 
 
-class HandObjectContacts:
-  """Contact flags + impulse magnitudes per hand contact body.
+def wrist_rot(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """World x-axis and z-axis of the wrist body frame (6D rotation)."""
+  robot: Entity = env.scene[asset_cfg.name]
+  body_ids = asset_cfg.body_ids
+  assert not isinstance(body_ids, slice)
+  rot = matrix_from_quat(robot.data.body_link_quat_w[:, body_ids[0]])
+  return torch.cat([rot[:, :, 0], rot[:, :, 2]], dim=-1)
 
-  The impulse is on the reference single-substep scale (see sensor_impulse);
-  pad sensor slots fold into their parent contact bodies.
-  """
+
+class PadContactObs:
+  """Per-pad contact flags then force magnitudes (2 x 6 pads = 12)."""
 
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
-    sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
-    self._sensor = sensor
-    self._dt = REFERENCE_IMPULSE_DT
-    self._pad_parents = cfg.params.get("pad_parent_indices")
+    self._sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
-    impulse = sensor_impulse(self._sensor, self._dt, self._pad_parents)
-    magnitude = impulse.norm(dim=-1)
-    # Reference drops per-contact impulses below SKIP_IMPULSE; floor the sum too.
-    magnitude = torch.where(
-      magnitude < SKIP_IMPULSE, torch.zeros_like(magnitude), magnitude
-    )
-    flags = (magnitude > FLAG_IMPULSE).float()
-    return torch.cat([flags, magnitude], dim=-1)
+    mag = contact_force(self._sensor).norm(dim=-1)
+    return torch.cat([contact_flags(self._sensor), mag], dim=-1)
 
 
-class WristOrientation:
-  """Wrist euler (unwrapped) + init-relative wrist euler.
-
-  The init rotation snapshot and the unwrap memory are stateful; the snapshot
-  is (re)captured on the first compute after a reset, when forward kinematics
-  of the new state are available.
-  """
+class LinkContactObs:
+  """Per-link instantaneous contact flags (15 finger links)."""
 
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
-    self._robot = env.scene[cfg.params["asset_cfg"].name]
-    self._wrist_ids = cfg.params["asset_cfg"].body_ids
-    n = env.num_envs
-    self._rot_init = torch.eye(3, device=env.device).expand(n, 3, 3).contiguous()
-    self._euler_prev = torch.zeros((n, 3), device=env.device)
-    self._pending = torch.ones(n, dtype=torch.bool, device=env.device)
-
-  def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
-    ids = slice(None) if env_ids is None else env_ids
-    self._pending[ids] = True
-    self._euler_prev[ids] = 0.0
+    self._sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
-    quat = self._robot.data.body_link_quat_w[:, self._wrist_ids[0]]
-    rot = matrix_from_quat(quat)
-    if bool(self._pending.any()):
-      self._rot_init[self._pending] = rot[self._pending]
-      self._pending[:] = False
-    euler = unwrap_euler(euler_from_rotmat(rot), self._euler_prev)
-    self._euler_prev[:] = euler
-    diff = euler_from_rotmat(self._rot_init.transpose(-1, -2) @ rot)
-    return torch.cat([euler, diff], dim=-1)
+    found = self._sensor.data.found
+    assert found is not None
+    return (found > 0).float()
 
 
 def nearest_affordance_points(
@@ -261,7 +204,7 @@ class AffordanceVectors:
   """Hand-centric distance vectors to the nearest affordance cloud point.
 
   Keypoints are the wrist, the 18 finger joints, and the 5 fingertip pads;
-  the 200-point cloud is precomputed in the object frame and tracked with the
+  the surface cloud is precomputed in the object frame and tracked with the
   live object pose (privileged teacher information).
   """
 

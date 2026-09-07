@@ -39,6 +39,7 @@ dependencies = [
   "mujoco-warp~=3.11.0",
   "mujoco~=3.11.0",
   "trimesh>=4.8.3",
+  "rtree>=1.4.1",
   "scipy>=1.15",
   "viser>=1.0.27",
   "mjviser>=0.0.14",
@@ -66,6 +67,7 @@ dexgrasp-eval = "mjlab.tasks.dexgrasp.scripts.evaluate:main"
 dexgrasp-watch-eval = "mjlab.tasks.dexgrasp.scripts.watch_eval:main"
 
 [dependency-groups]
+assets = ["coacd==1.0.14"]
 dev = [
   "ipdb>=0.13.13",
   "pre-commit>=4.3.0",

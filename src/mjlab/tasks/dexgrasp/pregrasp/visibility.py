@@ -2,9 +2,8 @@
 
 Casts one ray from the fixed camera toward each affordance-cloud point and
 keeps the first surface hit -- the object surface the camera actually sees.
-Ported from RobustDexGrasp's train.py visibility block; the cloud and mesh are
-this port's convex hull (see objects.precompute), so every ray from the outside
-hits the near face.
+Ported from RobustDexGrasp's train.py visibility block; both cloud and raycast
+use the source surface, including its concavities.
 """
 
 from __future__ import annotations
@@ -39,7 +38,7 @@ def visible_points(
 
   ``aff_pcd`` is the (N, 3) affordance cloud in the object frame; ``mesh`` is the
   matching surface mesh (object frame). Rays that miss fall back to their cloud
-  point (they cannot for a convex mesh viewed from outside).
+  point to tolerate numerical misses at triangle edges.
   """
   rot = _quat2mat(np.asarray(obj_quat, dtype=float))
   view_obj = rot.T @ (np.asarray(camera_pos, dtype=float) - obj_pos)

@@ -14,7 +14,7 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
     actor=RslRlModelCfg(
       hidden_dims=(128, 128),
       activation="lrelu",
-      obs_normalization=False,
+      obs_normalization=True,
       distribution_cfg={
         "class_name": "GaussianDistribution",
         "init_std": 1.0,
@@ -25,7 +25,7 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
     critic=RslRlModelCfg(
       hidden_dims=(128, 128),
       activation="lrelu",
-      obs_normalization=False,
+      obs_normalization=True,
     ),
     algorithm=RslRlPpoAlgorithmCfg(
       value_loss_coef=0.5,
@@ -33,13 +33,10 @@ def dexgrasp_teacher_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
       clip_param=0.2,
       entropy_coef=0.0,
       num_learning_epochs=4,
-      # Reference: 4 minibatches (88 env x 70 / 4 = 1540 samples), 16 updates per
-      # rollout. 16 minibatches made 64 adaptive-LR adjustments per rollout and the
-      # LR swung between its 1e-2 ceiling and 1e-5 floor within ~20 iterations in
-      # every 352-env run; fixed 5e-4 removes that confound.
+      # Reference: 4 minibatches, adaptive LR targeting desired_kl.
       num_mini_batches=4,
-      learning_rate=5.0e-4,
-      schedule="fixed",
+      learning_rate=1.0e-3,
+      schedule="adaptive",
       gamma=0.996,
       lam=0.95,
       desired_kl=0.01,

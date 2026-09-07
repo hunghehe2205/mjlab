@@ -1,4 +1,4 @@
-"""Tests for the DexGrasp teacher observation terms (Phase 1 §E)."""
+"""Tests for the DexGrasp teacher observation terms (native sensing)."""
 
 import io
 import math
@@ -18,13 +18,15 @@ from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
   dexgrasp_ur5e_rh5dg2_env_cfg,
 )
 from mjlab.tasks.dexgrasp.mdp.observations import (
+  LinkContactObs,
+  PadContactObs,
   compute_af_vec,
   hand_center_pos,
   nearest_affordance_points,
+  wrist_rot,
 )
-from mjlab.utils.lab_api.math import matrix_from_quat
 
-OBS_DIM = 24 + 24 + 32 + 24 + 6 + 3 + 6 + 72
+OBS_DIM = 24 + 24 + 12 + 15 + 24 + 6 + 3 + 6 + 72  # 186
 
 
 def test_hand_center_position_is_environment_local() -> None:
@@ -41,6 +43,47 @@ def test_hand_center_position_is_environment_local() -> None:
 
   expected = torch.tensor([[0.1, -0.2, 0.9], [0.1, -0.2, 0.9]])
   assert torch.allclose(local, expected)
+
+
+def test_wrist_rot_returns_frame_x_and_z_axes() -> None:
+  quat = torch.tensor([[[1.0, 0.0, 0.0, 0.0]]])  # identity, shape (B, nbody, 4)
+  robot = SimpleNamespace(data=SimpleNamespace(body_link_quat_w=quat))
+  scene = MagicMock()
+  scene.__getitem__.return_value = robot
+  env = SimpleNamespace(scene=scene)
+  asset_cfg = SceneEntityCfg("robot")
+  asset_cfg.body_ids = [0]
+
+  out = wrist_rot(cast(ManagerBasedRlEnv, env), asset_cfg=asset_cfg)
+
+  # x-axis then z-axis of an identity frame.
+  torch.testing.assert_close(out, torch.tensor([[1.0, 0.0, 0.0, 0.0, 0.0, 1.0]]))
+
+
+def test_pad_contact_obs_flags_then_magnitudes() -> None:
+  force = torch.zeros(1, 6, 3)
+  force[0, 0, 0] = 2.0  # thumb pad 2 N (flags)
+  force[0, 1, 0] = 0.5  # index pad 0.5 N (below threshold)
+  sensor = SimpleNamespace(data=SimpleNamespace(force=force))
+  env = cast(ManagerBasedRlEnv, SimpleNamespace(scene={"pad": sensor}, device="cpu"))
+  cfg = SimpleNamespace(params={"sensor_name": "pad"})
+
+  out = PadContactObs(cfg, env)(env)
+
+  flags = torch.tensor([[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+  mags = torch.tensor([[2.0, 0.5, 0.0, 0.0, 0.0, 0.0]])
+  torch.testing.assert_close(out, torch.cat([flags, mags], dim=-1))
+
+
+def test_link_contact_obs_is_boolean_found() -> None:
+  found = torch.tensor([[0.0, 3.0, 0.0]])  # 3 = matched contact count
+  sensor = SimpleNamespace(data=SimpleNamespace(found=found))
+  env = cast(ManagerBasedRlEnv, SimpleNamespace(scene={"link": sensor}, device="cpu"))
+  cfg = SimpleNamespace(params={"sensor_name": "link"})
+
+  out = LinkContactObs(cfg, env)(env)
+
+  torch.testing.assert_close(out, torch.tensor([[0.0, 1.0, 0.0]]))
 
 
 def test_nearest_affordance_points() -> None:
@@ -82,31 +125,34 @@ def test_teacher_obs_shape_and_contacts() -> None:
       obs, _ = env.reset()
       actor_obs = obs["actor"]
       assert isinstance(actor_obs, torch.Tensor)
-      contacts_reset = actor_obs[:, 48:64].clone()
+      pad_contact_reset = actor_obs[:, 48:60].clone()
       pd_error_reset = actor_obs[:, 24:48].clone()
       robot = env.scene["robot"]
       obj = env.scene["object"]
-      palm_id = robot.body_names.index("R_hand_palm")
-      palm_pos = robot.data.body_link_pos_w[:, palm_id].clone()
-      palm_axis = matrix_from_quat(robot.data.body_link_quat_w[:, palm_id])[:, :, 0]
-      # Sink the object into the palm along its approach axis: contact must fire
-      # whatever the IK pose, as long as the palm is not blocked.
-      pose = obj.data.root_link_pose_w.clone()
-      pose[:, :3] = palm_pos - 0.01 * palm_axis
-      obj.write_root_link_pose_to_sim(pose)
+      # Pin the object on the index fingertip pad each step so contact is
+      # sustained (instantaneous force reads the last substep): its pad flag
+      # (pad index 1 -> column 49) and dip-link flag (link index 5 -> column
+      # 65) must fire. Pad-mode sensing only sees the welded pad geoms.
+      tip_id = robot.body_names.index("R_index_force_sensor")
       action = torch.zeros(env.num_envs, 24)
-      saw_palm_contact = False
+      saw_pad_contact = False
+      saw_link_contact = False
       for _ in range(40):
+        pose = obj.data.root_link_pose_w.clone()
+        pose[:, :3] = robot.data.body_link_pos_w[:, tip_id]
+        obj.write_root_link_pose_to_sim(pose)
         obs, _, _, _, _ = env.step(action)
         actor_obs = obs["actor"]
         assert isinstance(actor_obs, torch.Tensor)
-        saw_palm_contact |= bool((actor_obs[:, 48] == 1.0).any())
+        saw_pad_contact |= bool((actor_obs[:, 49] == 1.0).any())  # index pad flag
+        saw_link_contact |= bool((actor_obs[:, 65] == 1.0).any())  # index dip link
       nan = bool(torch.isnan(actor_obs).any())
       shape = tuple(actor_obs.shape)
       env.close()
 
   assert shape == (2, OBS_DIM)
   assert not nan
-  assert torch.all(contacts_reset == 0.0)  # nothing touches the object at reset
+  assert torch.all(pad_contact_reset == 0.0)  # nothing touches the object at reset
   assert torch.all(pd_error_reset.abs() < 1e-4)  # target anchored to qpos at reset
-  assert saw_palm_contact  # object pressed into the palm
+  assert saw_pad_contact  # object pressed into the index fingertip pad
+  assert saw_link_contact  # ... and the index dip link it is welded to

@@ -17,10 +17,10 @@ from mjlab.asset_zoo.robots.ur5e_rh5dg2.ur5e_rh5dg2_constants import (
 )
 from mjlab.entity.variants import VariantEntityCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
+from mjlab.envs.mdp.actions import RelativeJointPositionActionCfg
 from mjlab.sensor import ContactSensorCfg
 from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import (
   ARM_MOUNT_Z,
-  HAND_TABLE_TERMINATION_TOLERANCE,
   PHASE1_OBJECT_NAMES,
   SKELETON_OBJECT,
   dexgrasp_ur5e_rh5dg2_env_cfg,
@@ -32,9 +32,6 @@ from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import (
   TABLE_FRICTION,
   TABLE_TOP_Z,
   get_arena_spec,
-)
-from mjlab.tasks.dexgrasp.mdp.actions import (
-  ReferenceRelativeJointPositionActionCfg,
 )
 from mjlab.tasks.registry import list_tasks
 
@@ -79,18 +76,19 @@ def test_table_contact_matches_reference_friction() -> None:
   robot_model = get_ur5e_rh5dg2_robot_cfg().spec_fn().compile()
   np.testing.assert_allclose(robot_model.geom_friction[:, 0], rc.ROBOT_FRICTION)
   obj_model = oc.get_mesh_object_spec("potted_meat_can").compile()
-  assert obj_model.geom_friction[0, 0] == pytest.approx(TABLE_FRICTION)
+  collision = obj_model.geom_contype != 0
+  np.testing.assert_allclose(obj_model.geom_friction[collision, 0], TABLE_FRICTION)
 
 
 def test_failure_semantics_are_explicit_in_training_config() -> None:
   cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
-  params = cfg.terminations["hand_below_table"].params
 
   # The reference discards its own -2.0 clip and overwrites the -10 terminal, so
-  # neither reaches PPO; both are disabled here to match.
+  # neither reaches PPO; both are disabled here to match. Leaving the workspace
+  # is a truncation (time_out=True), not an early termination.
   assert cfg.termination_reward == pytest.approx(0.0)
   assert cfg.reward_clip_min is None
-  assert params["tolerance"] == pytest.approx(HAND_TABLE_TERMINATION_TOLERANCE)
+  assert cfg.terminations["object_out_of_workspace"].time_out is True
 
 
 def test_reference_training_randomization_and_policy_config() -> None:
@@ -102,15 +100,15 @@ def test_reference_training_randomization_and_policy_config() -> None:
   action = cfg.actions["joint_pos"]
   runner = dexgrasp_teacher_ppo_runner_cfg()
 
-  assert isinstance(action, ReferenceRelativeJointPositionActionCfg)
-  assert action.first_substep_delay_prob == pytest.approx(0.5)
+  assert isinstance(action, RelativeJointPositionActionCfg)
+  assert action.clip_to_joint_limits is True
   assert cfg.events["reset_grasp_pose"].params["non_uniform_sampling"] is True
   assert play_cfg.events["reset_grasp_pose"].params["non_uniform_sampling"] is False
   assert eval_cfg.events["reset_grasp_pose"].params["non_uniform_sampling"] is False
   assert runner.actor.activation == "lrelu"
   assert runner.critic.activation == "lrelu"
-  assert runner.actor.obs_normalization is False
-  assert runner.critic.obs_normalization is False
+  assert runner.actor.obs_normalization is True
+  assert runner.critic.obs_normalization is True
   assert tuple(cfg.observations) == ("actor",)
   assert runner.obs_groups["critic"] == ("actor",)
   distribution_cfg = runner.actor.distribution_cfg
@@ -121,25 +119,22 @@ def test_reference_training_randomization_and_policy_config() -> None:
 def test_arm_contact_configuration_matches_reference_pairs() -> None:
   cfg = dexgrasp_ur5e_rh5dg2_env_cfg(object_name=SKELETON_OBJECT)
   sensors = {sensor.name: sensor for sensor in cfg.scene.sensors}
-  arm_world = sensors["arm_world_contact"]
-  arm_table = sensors["arm_table_contact"]
-  arm_object = sensors["arm_object_contact"]
+  arm_any = sensors["arm_any"]
+  arm_table = sensors["arm_table"]
+  arm_object = sensors["arm_object"]
 
-  assert isinstance(arm_world, ContactSensorCfg)
+  assert isinstance(arm_any, ContactSensorCfg)
   assert isinstance(arm_table, ContactSensorCfg)
   assert isinstance(arm_object, ContactSensorCfg)
-  assert arm_world.fields == ("found",)
-  assert arm_world.history_length == 0
+  assert arm_any.fields == ("found",)
+  assert arm_any.history_length == 0
   assert arm_table.fields == ("force",)
   assert arm_object.fields == ("force",)
   assert cfg.rewards["arm_contact"].params["sensor_names"] == (
-    "arm_table_contact",
-    "arm_object_contact",
+    "arm_table",
+    "arm_object",
   )
-  assert cfg.rewards["arm_impulse"].params["sensor_names"] == (
-    "arm_table_contact",
-    "arm_object_contact",
-  )
+  assert cfg.rewards["arm_force"].params["sensor_names"] == ("arm_table", "arm_object")
 
 
 @pytest.mark.slow
@@ -173,7 +168,9 @@ def test_skeleton_builds_and_steps() -> None:
   assert base_z == pytest.approx(ARM_MOUNT_Z, abs=1e-3)
   obj = oc.PHASE1_OBJECTS[SKELETON_OBJECT]
   # + 2 mm spawn clearance baked into the sampled pose.
-  assert obj_z == pytest.approx(TABLE_TOP_Z - obj.lowest_point + 0.002, abs=1e-3)
+  assert obj_z == pytest.approx(
+    TABLE_TOP_Z - obj.placement_lowest_point + 0.002, abs=1e-3
+  )
   for name, want in rc.INIT_FINGER_POSE.items():
     assert finger_q[name] == pytest.approx(want, abs=1e-3)
 
@@ -216,7 +213,7 @@ def test_baseline_cohort_steps_with_per_world_variants() -> None:
 
   actor_obs = obs["actor"]
   assert isinstance(actor_obs, torch.Tensor)
-  assert actor_obs.shape == (8, 191)
+  assert actor_obs.shape == (8, 186)
   assert torch.isfinite(actor_obs).all()
   assert torch.isfinite(reward).all()
   assert variant_ids.unique().numel() > 1

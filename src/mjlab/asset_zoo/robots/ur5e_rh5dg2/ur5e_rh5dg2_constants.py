@@ -30,29 +30,6 @@ assert HAND_XML.exists()
 
 ROBOT_FRICTION = 0.8
 
-# Arm servo bandwidth. The menagerie gains give kd/kp = 0.2 s -- exactly the 5 Hz
-# control period -- so a saturated action only realizes 1-exp(-1) = 63% of its
-# delta. Retuning to a uniform natural frequency with zeta ~ 1 reproduces the
-# reference's system-identified UR5 controller (kp 15775-16202, kd 281-577,
-# i.e. wn 63.7, zeta 1.15) and is stable at any timestep since kp*dt^2/M
-# reduces to (wn*dt)^2, independent of link inertia.
-ARM_OMEGA_N = 64.0
-ARM_ZETA = 1.15
-
-
-def _retune_arm_gains(spec: mujoco.MjSpec) -> None:
-  """Set arm position gains to (ARM_OMEGA_N, ARM_ZETA) using per-dof inertia."""
-  model = spec.compile()
-  for act in spec.actuators:
-    joint = model.joint(act.target)
-    inertia = model.dof_M0[joint.dofadr[0]]
-    kp = inertia * ARM_OMEGA_N**2
-    kd = 2.0 * ARM_ZETA * inertia * ARM_OMEGA_N
-    act.gainprm[0] = kp
-    act.biasprm[1] = -kp
-    act.biasprm[2] = -kd
-
-
 # Attach prefix for hand elements; avoids name clashes with the arm.
 HAND_PREFIX = "rh/"
 
@@ -66,8 +43,6 @@ def get_spec() -> mujoco.MjSpec:
   site = arm.site("attachment_site")
   frame = arm.body("wrist_3_link").add_frame(pos=list(site.pos), quat=list(site.quat))
   arm.attach(child=hand, prefix=HAND_PREFIX, frame=frame)
-
-  _retune_arm_gains(arm)
 
   # Reference default material friction (RaiSim setDefaultMaterial(0.8)). Makes
   # hand-table and hand-object contacts 0.8 once the table drops its priority.
@@ -91,16 +66,18 @@ def get_spec() -> mujoco.MjSpec:
 # Actuator config.
 ##
 
+# Per-step delta-action scale (RobustDexGrasp: arm 0.005, finger 0.015 rad).
+ACTION_SCALE_ARM = 0.005
+ACTION_SCALE_FINGER = 0.015
+
 # Only the fingers are configured here; the arm keeps its menagerie XML actuators.
-# Grip torque saturates at kp * ACTION_SCALE_FINGER, so kp=1 capped it at
-# 0.015 Nm -- 47x below the reference Allegro's 0.7 Nm. Matching the reference's
-# kp=600 needs armature to carry it: reflected rotor inertia dominates a geared
-# finger, and without it kp*dt^2/M blows up (measured unstable above kp=67 at
-# armature=1e-4). kd is set for zeta ~ 1 at that armature.
-FINGER_STIFFNESS = 600.0
-FINGER_ARMATURE = 3e-2
-FINGER_DAMPING = 2.0 * (FINGER_STIFFNESS * FINGER_ARMATURE) ** 0.5
+# kp = effort / action_scale so one full-scale action commands the rated torque.
+# Armature carries the stiffness (reflected rotor inertia dominates a geared
+# finger); kd set for zeta ~ 1 at that armature.
 FINGER_EFFORT_LIMIT = 1.0  # matches the hand XML actuatorfrcrange (+/-1 Nm).
+FINGER_STIFFNESS = FINGER_EFFORT_LIMIT / ACTION_SCALE_FINGER  # 66.7
+FINGER_ARMATURE = 1e-2
+FINGER_DAMPING = 2.0 * (FINGER_STIFFNESS * FINGER_ARMATURE) ** 0.5
 
 # Match bare joint names: mjlab strips the attach prefix from entity-local names.
 HAND_ACTUATORS = (
@@ -200,12 +177,8 @@ KEYPOINT_BODIES = (
   "R_pinky_force_sensor",
 )
 
-# Contact bodies for the contact/impulse observation: palm plus the three
-# distal links of each finger. The pad bodies are fixed children of the dip
-# links (and of the palm); body-mode sensors don't see child-body geoms, so
-# the pads get their own sensor slots (PAD_BODIES) folded into these 16.
-CONTACT_BODIES = (
-  "R_hand_palm",
+# Finger links (mcp, pip, dip per finger) for the link-contact observation.
+CONTACT_LINK_BODIES = (
   "R_thumb_mcp",
   "R_thumb_pip",
   "R_thumb_dip",
@@ -223,8 +196,7 @@ CONTACT_BODIES = (
   "R_pinky_dip",
 )
 
-# Welded pad bodies holding the pad collision meshes, and the CONTACT_BODIES
-# slot each folds into (the pad's parent: per-finger dip link, then palm).
+# Welded pad bodies holding the pad collision meshes (finger pads, palm last).
 PAD_BODIES = (
   "R_thumb_force_sensor",
   "R_index_force_sensor",
@@ -233,7 +205,6 @@ PAD_BODIES = (
   "R_pinky_force_sensor",
   "R_palm_force_sensor",
 )
-PAD_PARENT_INDICES = (3, 6, 9, 12, 15, 0)
 
 # Arm bodies whose frames give the 6 arm-link heights above the table.
 ARM_LINK_BODIES = (
@@ -248,17 +219,14 @@ ARM_LINK_BODIES = (
 # All actuated joints in action/observation order (arm then fingers).
 ALL_JOINT_NAMES = ARM_JOINT_NAMES + FINGER_JOINT_NAMES
 
-# Finger-layout indices for the §F reward weights, aligned with
-# KEYPOINT_BODIES / CONTACT_BODIES order.
+# Keypoint weight indices (aligned with KEYPOINT_BODIES order).
 KEYPOINT_TIP_INDICES = (5, 10, 15, 19, 23)  # thumb, index, middle, ring, pinky pads
 KEYPOINT_THUMB_TIP_INDEX = 5
-CONTACT_TIP_INDICES = (3, 6, 9, 12, 15)  # per-finger dip link
-CONTACT_THUMB_INDICES = (1, 2, 3)
-CONTACT_THUMB_TIP_INDEX = 3
 
-# Per-step delta-action scale (RobustDexGrasp: arm 0.005, finger 0.015 rad).
-ACTION_SCALE_ARM = 0.005
-ACTION_SCALE_FINGER = 0.015
+# Pad weight indices (aligned with PAD_BODIES: thumb..pinky pads, palm last).
+PAD_TIP_INDICES = (0, 1, 2, 3, 4)
+PAD_THUMB_INDEX = 0
+PAD_PALM_INDEX = 5
 
 # Pre-grasp finger pose (cupped, thumb opposed); first estimate, refine in viewer.
 # Thumb matches the RaiSim RH5-DG2 variant. At yaw 1.2 the thumb tip sat 4 cm

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import torch
 
 from mjlab.entity import Entity
-from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.utils.lab_api.math import matrix_from_quat
 
 if TYPE_CHECKING:
@@ -42,12 +41,6 @@ def object_tilt_deg(
   """Object tilt from upright in degrees; 45+ means it was knocked over."""
   obj: Entity = env.scene[object_entity]
   return object_tilt_angle(obj.data.root_link_quat_w) * (180.0 / math.pi)
-
-
-def joint_pos_mean(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
-  """Mean position of the selected joints."""
-  robot: Entity = env.scene[asset_cfg.name]
-  return robot.data.joint_pos[:, asset_cfg.joint_ids].mean(dim=-1)
 
 
 def mean_arm_action_magnitude(

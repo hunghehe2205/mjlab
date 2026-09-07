@@ -1,10 +1,8 @@
-"""DexGrasp reward terms (Phase 1 §F), reference coeffs kept as baseline.
+"""DexGrasp reward terms, native MuJoCo contact forces (Newton).
 
-Python-side terms (train.py): affordance distance, table log-barrier, arm
-height log-barrier, arm collision. C++-side terms (Environment.hpp step()):
-weighted contact/impulse rewards, object stability, wrist and arm joint
-velocity penalties. Terms return unweighted values; the reference coeffs from
-cfg_reg.yaml are applied as mjlab reward weights.
+Terms return unweighted values; the reference cfg_reg.yaml coefficients are
+applied as mjlab reward weights. Contact/force terms read the mean net force
+over one control step instead of a RaiSim-style impulse.
 """
 
 from __future__ import annotations
@@ -17,17 +15,17 @@ import torch
 from mjlab.asset_zoo.objects.dexgrasp import object_constants as oc
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.sensor import ContactSensor
-from mjlab.tasks.dexgrasp.mdp.metrics import object_root_pos_state
-from mjlab.tasks.dexgrasp.mdp.observations import (
-  FLAG_IMPULSE,
-  REFERENCE_IMPULSE_DT,
-  keypoint_min_distances,
-  sensor_impulse,
+from mjlab.tasks.dexgrasp.mdp.contacts import (
+  CONTACT_FORCE_THRESHOLD,
+  contact_flags,
+  contact_force,
 )
+from mjlab.tasks.dexgrasp.mdp.metrics import object_root_pos_state
+from mjlab.tasks.dexgrasp.mdp.observations import keypoint_min_distances
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
+  from mjlab.sensor import ContactSensor
 
 __all__ = [
   "REWARD_COEFFS",
@@ -36,8 +34,10 @@ __all__ = [
   "AffordanceDistance",
   "TableLogBarrier",
   "ArmHeightLogBarrier",
-  "ContactReward",
-  "EnclosureGatedContact",
+  "PadContact",
+  "PadForce",
+  "ArmContact",
+  "ArmForce",
   "ArmCollision",
   "ObjectDisplacement",
   "object_velocity",
@@ -47,23 +47,19 @@ __all__ = [
   "arm_joint_velocity",
 ]
 
-# cfg_reg.yaml environment.reward coefficients (baseline).
+# cfg_reg.yaml reward coefficients. Force-term coeffs carry the reference impulse
+# coeff x 0.01 s (force N -> impulse N s); the term returns raw Newton.
 REWARD_COEFFS = {
   "affordance_distance": 0.5,
-  # Contact/impulse are enclosure-gated (thumb + >=2 fingers): they fire only on
-  # a wrapping grip, not palm/single-finger farming. Impulse halved so squeeze
-  # stops dominating the shaped reward once gated.
-  "affordance_contact": 1.5,
-  "affordance_impulse": 0.5,
   "table_logbarrier": -0.03,
-  "table_contact": -1.0,
-  "table_impulse": -0.5,
   "arm_height_logbarrier": -0.05,
+  "affordance_contact": 1.5,
+  "affordance_force": 0.01,
+  "table_contact": -1.0,
+  "table_force": -0.005,
   "arm_contact": -0.1,
-  "arm_impulse": -0.1,
+  "arm_force": -0.001,
   "arm_collision": -1.0,
-  # Reference object-stability coefficients; the softened -5/-0.1/-2 let the
-  # policy push and tip the object (8yelo0qc displacement 3 -> 8 cm).
   "object_velocity": -15.0,
   "object_angular_velocity": -0.2,
   "object_displacement": -5.0,
@@ -92,23 +88,20 @@ def affordance_weights(
   return w
 
 
-def contact_weights(
-  tip_indices: tuple[int, ...],
-  thumb_indices: tuple[int, ...],
-  thumb_tip_index: int,
-  palm_index: int,
-  num: int = 16,
-  device: str = "cpu",
-) -> torch.Tensor:
-  """Contact-reward body weights (tips x3, thumb x2, thumb tip x2, palm 0)."""
-  w = torch.ones(num, dtype=torch.float32, device=device)
-  w[list(tip_indices)] *= 3.0
-  w[list(thumb_indices)] *= 2.0
-  w[thumb_tip_index] *= 2.0
-  w[palm_index] = 0.0
-  w /= w.sum()
-  w *= 16.0
-  return w
+def contact_weights(body_names: tuple[str, ...], device: str = "cpu") -> torch.Tensor:
+  """Per-body contact weights by name (tip x3, thumb x2, palm 0); raw."""
+  w = []
+  for n in body_names:
+    if "palm" in n:
+      w.append(0.0)
+      continue
+    val = 1.0
+    if n.endswith("_dip") or n.endswith("_force_sensor"):  # fingertip link or pad
+      val *= 3.0
+    if "thumb" in n:
+      val *= 2.0
+    w.append(val)
+  return torch.tensor(w, dtype=torch.float32, device=device)
 
 
 class AffordanceDistance:
@@ -186,88 +179,69 @@ class ArmHeightLogBarrier:
     return -torch.log(50.0 * clipped).sum(dim=-1)
 
 
-class ContactReward:
-  """Weighted contact flags or clipped impulse reward from a contact sensor.
+class PadContact:
+  """Weighted contact flags: sum(w * flag) / sum(w), a weighted fraction."""
 
-  mode "flags": sum(weights * (impulse_norm > 0.01)) / divisor.
-  mode "impulse_xy": sum(weights * clamp(|impulse_xy|, high)).
-  mode "impulse": sum(weights * clamp(|impulse|, high)).
-  Without weights, the per-body vector is reduced by norm (arm terms).
-  Pad sensor slots fold into their parent bodies via pad_parent_indices.
+  def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
+    self._sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
+    self._weights = torch.as_tensor(
+      cfg.params["weights"], dtype=torch.float32, device=env.device
+    )
+
+  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
+    del env, kwargs
+    return (contact_flags(self._sensor) * self._weights).sum(
+      dim=-1
+    ) / self._weights.sum()
+
+
+class PadForce:
+  """Weighted clipped contact force in Newton: sum(w * min(|F|, clip)).
+
+  With ``use_xy`` the horizontal force magnitude is used, rewarding a lateral
+  squeeze rather than a vertical press.
   """
 
   def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
-    sensor_names = cfg.params.get("sensor_names")
-    if sensor_names is None:
-      sensor_names = (cfg.params["sensor_name"],)
+    self._sensor: ContactSensor = env.scene[cfg.params["sensor_name"]]
+    self._weights = torch.as_tensor(
+      cfg.params["weights"], dtype=torch.float32, device=env.device
+    )
+    self._clip = torch.as_tensor(
+      cfg.params["clip"], dtype=torch.float32, device=env.device
+    )
+    self._use_xy = bool(cfg.params.get("use_xy", False))
+
+  def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
+    del env, kwargs
+    force = contact_force(self._sensor)
+    mag = force[..., :2].norm(dim=-1) if self._use_xy else force.norm(dim=-1)
+    return (mag.clamp(max=self._clip) * self._weights).sum(dim=-1)
+
+
+class ArmContact:
+  """L2 norm of per-link contact flags, forces summed over the arm sensors."""
+
+  def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
     self._sensors: tuple[ContactSensor, ...] = tuple(
-      env.scene[name] for name in sensor_names
-    )
-    self._dt = REFERENCE_IMPULSE_DT
-    self._pad_parents = cfg.params.get("pad_parent_indices")
-    self._mode = cfg.params["mode"]
-    self._divisor = float(cfg.params.get("divisor", 1.0))
-    clip_high = cfg.params.get("clip_high")
-    self._clip_high = (
-      torch.as_tensor(clip_high, dtype=torch.float32, device=env.device)
-      if clip_high is not None
-      else None
-    )
-    self._weights = (
-      torch.as_tensor(cfg.params["weights"], dtype=torch.float32, device=env.device)
-      if "weights" in cfg.params
-      else None
+      env.scene[name] for name in cfg.params["sensor_names"]
     )
 
-  def _impulse(self) -> torch.Tensor:
-    """Summed per-body impulse [E, B, 3] across the term's sensors."""
-    impulses = [
-      sensor_impulse(sensor, self._dt, self._pad_parents) for sensor in self._sensors
-    ]
-    return torch.stack(impulses).sum(dim=0)
-
-  def _reduce(self, impulse: torch.Tensor) -> torch.Tensor:
-    """Mode-specific reduction of a per-body impulse to a per-env scalar."""
-    if self._mode == "flags":
-      value = (impulse.norm(dim=-1) > FLAG_IMPULSE).float()
-    elif self._mode == "impulse_xy":
-      value = impulse[..., :2].norm(dim=-1)
-    else:
-      value = impulse.norm(dim=-1)
-    if self._mode != "flags" and self._clip_high is not None:
-      value = value.clamp(max=self._clip_high)
-    if self._weights is not None:
-      return (value * self._weights).sum(dim=-1) / self._divisor
-    return value.norm(dim=-1)
+  def _force(self) -> torch.Tensor:
+    return torch.stack([contact_force(s) for s in self._sensors]).sum(dim=0)
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
-    return self._reduce(self._impulse())
+    flags = (self._force().norm(dim=-1) > CONTACT_FORCE_THRESHOLD).float()
+    return flags.norm(dim=-1)
 
 
-class EnclosureGatedContact(ContactReward):
-  """ContactReward gated on an opposition grip.
-
-  Zero unless the thumb tip and at least ``min_fingers`` non-thumb fingertips
-  are in contact, so palm-only or single-finger presses score nothing -- only a
-  wrapping (force-closure) grip is rewarded.
-  """
-
-  def __init__(self, cfg, env: ManagerBasedRlEnv) -> None:
-    super().__init__(cfg, env)
-    self._thumb_tip = int(cfg.params["thumb_tip_index"])
-    self._finger_tips = list(cfg.params["finger_tip_indices"])
-    self._min_fingers = int(cfg.params.get("min_fingers", 2))
+class ArmForce(ArmContact):
+  """L2 norm of per-link |F| in Newton, forces summed over the arm sensors."""
 
   def __call__(self, env: ManagerBasedRlEnv, **kwargs) -> torch.Tensor:
     del env, kwargs
-    impulse = self._impulse()
-    value = self._reduce(impulse)
-    flags = impulse.norm(dim=-1) > FLAG_IMPULSE
-    thumb = flags[:, self._thumb_tip]
-    fingers = flags[:, self._finger_tips].sum(dim=-1)
-    gate = (thumb & (fingers >= self._min_fingers)).float()
-    return value * gate
+    return self._force().norm(dim=-1).norm(dim=-1)
 
 
 class ArmCollision:

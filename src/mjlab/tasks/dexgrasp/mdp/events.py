@@ -33,7 +33,7 @@ class ResetGraspPose:
     objects = [oc.PHASE1_OBJECTS[name] for name in names]
     self._meshes = [obj.load_affordance_mesh() for obj in objects]
     self._pcds = [obj.load_surface_points().astype(np.float64) for obj in objects]
-    self._lowest = np.asarray([obj.lowest_point for obj in objects])
+    self._lowest = np.asarray([obj.placement_lowest_point for obj in objects])
     self._clearance = float(p.get("object_clearance", 0.002))
     self._non_uniform_sampling = bool(p.get("non_uniform_sampling", True))
     self._kin = ArmKinematics(mount_pos=(0.0, 0.0, float(p["mount_z"])))
@@ -43,7 +43,7 @@ class ResetGraspPose:
     self._probe = ArmHandSelfCollisionProbe()
     if not self._probe.is_valid_pregrasp(self._seed):
       raise ValueError("UR5e RH5-DG2 home arm pose is not a valid pre-grasp.")
-    # Seed from mjlab's global numpy RNG, not raw cfg.seed (None -> OS entropy when unset).
+    # Seed from mjlab's global numpy RNG, not raw cfg.seed (None -> OS entropy).
     self._rng = np.random.default_rng(int(np.random.randint(0, 2**31 - 1)))
     robot = env.scene["robot"]
     self._arm_ids = [robot.joint_names.index(n) for n in rc.ARM_JOINT_NAMES]

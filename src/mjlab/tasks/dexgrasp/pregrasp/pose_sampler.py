@@ -1,4 +1,4 @@
-"""Object pose + palm-roll sampling for the pre-grasp (§C).
+"""Object pose + palm-roll sampling for the pre-grasp.
 
 Polar tabletop object poses and the `sample_rot_mats` palm-roll candidates,
 ported from RobustDexGrasp's train.py / initial_pose_final.py. Pure numpy;

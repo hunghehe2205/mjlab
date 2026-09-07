@@ -96,9 +96,13 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       func=mdp.pd_error,
       params={"action_name": "joint_pos", "asset_cfg": SceneEntityCfg("robot")},
     ),
-    "contacts": ObservationTermCfg(
-      func=mdp.HandObjectContacts,
-      params={"sensor_name": "hand_object_contact"},
+    "pad_contact": ObservationTermCfg(
+      func=mdp.PadContactObs,
+      params={"sensor_name": "pad_object"},
+    ),
+    "link_contact": ObservationTermCfg(
+      func=mdp.LinkContactObs,
+      params={"sensor_name": "link_object"},
     ),
     "keypoint_heights": ObservationTermCfg(
       func=mdp.link_heights,
@@ -112,8 +116,8 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       func=mdp.hand_center_pos,
       params={"asset_cfg": SceneEntityCfg("robot")},
     ),
-    "wrist_orientation": ObservationTermCfg(
-      func=mdp.WristOrientation,
+    "wrist_rot": ObservationTermCfg(
+      func=mdp.wrist_rot,
       params={"asset_cfg": SceneEntityCfg("robot")},
     ),
     "af_vec": ObservationTermCfg(
@@ -130,13 +134,12 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
   }
 
   actions: dict[str, ActionTermCfg] = {
-    "joint_pos": mdp.ReferenceRelativeJointPositionActionCfg(
+    "joint_pos": mdp.RelativeJointPositionActionCfg(
       entity_name="robot",
       actuator_names=(".*",),
       scale=1.0,  # Override per-robot (arm 0.005 / finger 0.015).
-      # Clamp target to soft limits (no finger ctrlrange); delta unclipped, see §D.
+      # Clamp target to soft limits (no finger ctrlrange); delta unclipped.
       clip_to_joint_limits=True,
-      first_substep_delay_prob=0.5,
     )
   }
 
@@ -172,7 +175,7 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
     ),
   }
 
-  rewards = {}  # §F reward stack is wired per-robot in config/<robot>/env_cfgs.py.
+  rewards = {}  # Reward stack is wired per-robot in config/<robot>/env_cfgs.py.
 
   terminations = {
     "time_out": TerminationTermCfg(func=mdp.time_out, time_out=True),
@@ -200,7 +203,7 @@ def make_dexgrasp_env_cfg() -> ManagerBasedRlEnvCfg:
       azimuth=140.0,
     ),
     sim=SimulationCfg(
-      # Headroom for multi-finger grasp (cf. lift_cube's 55/600); revisit after §H.
+      # Headroom for multi-finger grasp (cf. lift_cube's 55/600).
       nconmax=150,
       njmax=1500,
       mujoco=MujocoCfg(

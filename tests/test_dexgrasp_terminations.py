@@ -7,12 +7,8 @@ from unittest.mock import MagicMock
 import torch
 
 from mjlab.envs import ManagerBasedRlEnv
-from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.tasks.dexgrasp.config.ur5e_rh5dg2.env_cfgs import OBJECT_WORKSPACE_BOUNDS
-from mjlab.tasks.dexgrasp.mdp.terminations import (
-  hand_below_table,
-  object_out_of_workspace,
-)
+from mjlab.tasks.dexgrasp.mdp.terminations import object_out_of_workspace
 
 _BOUNDS = OBJECT_WORKSPACE_BOUNDS
 
@@ -23,53 +19,6 @@ def _env_with_object(positions: torch.Tensor, origins: torch.Tensor):
   scene.__getitem__.return_value = obj
   scene.env_origins = origins
   return SimpleNamespace(scene=scene)
-
-
-def test_hand_below_table_uses_each_environment_origin() -> None:
-  positions = torch.tensor(
-    [
-      [[0.0, 0.0, 0.80], [0.0, 0.0, 0.79]],
-      [[0.0, 0.0, 1.30], [0.0, 0.0, 1.24]],
-    ]
-  )
-  robot = SimpleNamespace(data=SimpleNamespace(body_link_pos_w=positions))
-  scene = MagicMock()
-  scene.__getitem__.return_value = robot
-  scene.env_origins = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.50]])
-  env = SimpleNamespace(scene=scene)
-  asset_cfg = SceneEntityCfg("robot")
-  asset_cfg.body_ids = [0, 1]
-
-  terminated = hand_below_table(
-    cast(ManagerBasedRlEnv, env), table_top_z=0.771, asset_cfg=asset_cfg
-  )
-
-  assert torch.equal(terminated, torch.tensor([False, True]))
-
-
-def test_hand_below_table_allows_small_contact_penetration() -> None:
-  positions = torch.tensor(
-    [
-      [[0.0, 0.0, 0.768]],
-      [[0.0, 0.0, 0.765]],
-    ]
-  )
-  robot = SimpleNamespace(data=SimpleNamespace(body_link_pos_w=positions))
-  scene = MagicMock()
-  scene.__getitem__.return_value = robot
-  scene.env_origins = torch.zeros(2, 3)
-  env = SimpleNamespace(scene=scene)
-  asset_cfg = SceneEntityCfg("robot")
-  asset_cfg.body_ids = [0]
-
-  terminated = hand_below_table(
-    cast(ManagerBasedRlEnv, env),
-    table_top_z=0.771,
-    asset_cfg=asset_cfg,
-    tolerance=0.005,
-  )
-
-  assert torch.equal(terminated, torch.tensor([False, True]))
 
 
 def test_object_out_of_workspace_flags_each_axis_violation() -> None:

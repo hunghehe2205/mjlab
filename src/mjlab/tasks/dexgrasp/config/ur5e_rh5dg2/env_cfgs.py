@@ -14,25 +14,19 @@ from mjlab.managers.metrics_manager import MetricsTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
-from mjlab.sensor import ContactMatch, ContactSensorCfg
 from mjlab.tasks.dexgrasp import mdp
 from mjlab.tasks.dexgrasp.dexgrasp_env_cfg import (
   ARM_MOUNT_Z,
-  DECIMATION,
   TABLE_CENTER,
   TABLE_HALF,
   TABLE_TOP_Z,
   make_dexgrasp_env_cfg,
 )
-from mjlab.tasks.dexgrasp.mdp.rewards import (
-  REWARD_COEFFS,
-  contact_weights,
-)
+from mjlab.tasks.dexgrasp.mdp.contacts import HAND_TABLE_BODIES, force_clips
+from mjlab.tasks.dexgrasp.mdp.rewards import REWARD_COEFFS, contact_weights
 
 # Actuator-name regexes -> delta-action scale (arm 0.005, finger 0.015 rad).
-# Like RobustDexGrasp, scale is a residual gain, not a per-step cap: the delta is
-# unbounded and only the absolute target is limited (arm actuator ctrlrange;
-# fingers by joint limits). §D adds explicit soft-limit target clipping.
+# Scale is a residual gain, not a per-step cap; only the absolute target clamps.
 ACTION_SCALE = {
   r"(shoulder|elbow|wrist).*": rc.ACTION_SCALE_ARM,
   r"R_.*": rc.ACTION_SCALE_FINGER,
@@ -40,7 +34,6 @@ ACTION_SCALE = {
 
 SKELETON_OBJECT = "potted_meat_can"
 OBJECT_XY = (0.0, -0.6)  # Polar r~0.6, theta=-0.5pi (in the sampling region).
-HAND_TABLE_TERMINATION_TOLERANCE = 0.005
 PHASE1_OBJECT_NAMES = (
   "potted_meat_can",
   "tomato_soup_can",
@@ -68,8 +61,8 @@ def get_dexgrasp_robot_cfg() -> EntityCfg:
   """UR5e + RH5-DG2 with its base raised onto the pedestal.
 
   Fingers start at the cupped pre-grasp so reset lands on a valid pose; leaving
-  them at 0 gets silently clamped up to the soft joint limits. §C overrides the
-  arm via IK per reset.
+  them at 0 gets silently clamped up to the soft joint limits. The arm is
+  overridden via IK per reset.
   """
   joint_pos = {**(rc.HOME_KEYFRAME.joint_pos or {}), **rc.INIT_FINGER_POSE}
   init_state = dataclasses.replace(
@@ -85,7 +78,7 @@ def get_dexgrasp_robot_cfg() -> EntityCfg:
 def get_skeleton_object_cfg(name: str) -> EntityCfg:
   obj = oc.PHASE1_OBJECTS[name]
   init_state = EntityCfg.InitialStateCfg(
-    pos=(OBJECT_XY[0], OBJECT_XY[1], TABLE_TOP_Z - obj.lowest_point),
+    pos=(OBJECT_XY[0], OBJECT_XY[1], TABLE_TOP_Z - obj.placement_lowest_point),
   )
   return EntityCfg(init_state=init_state, spec_fn=obj.spec_fn)
 
@@ -99,107 +92,8 @@ def get_dexgrasp_object_cfg(object_names: tuple[str, ...]) -> EntityCfg:
   return oc.get_phase1_variant_cfg(object_names)
 
 
-# Body-mode slots only see the body's own geoms, so the welded pad bodies get
-# the 6 trailing slots; consumers fold them into the canonical 16 via
-# rc.PAD_PARENT_INDICES.
-_HAND_SENSOR_BODIES = rc.CONTACT_BODIES + rc.PAD_BODIES
-
-
-def get_hand_object_contact_sensor() -> ContactSensorCfg:
-  """Hand-vs-object contact sensor: 16 contact bodies + 6 pad slots.
-
-  Literal compiled names keep the canonical CONTACT_BODIES-then-PAD_BODIES
-  order on the per-primary axis; net-force + history gives one force vector
-  per body per substep.
-  """
-  return ContactSensorCfg(
-    name="hand_object_contact",
-    primary=ContactMatch(
-      mode="body",
-      pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in _HAND_SENSOR_BODIES),
-    ),
-    secondary=ContactMatch(mode="subtree", pattern="object", entity="object"),
-    fields=("force",),
-    reduce="netforce",
-    history_length=DECIMATION,
-  )
-
-
-def _hand_table_sensor(name: str, secondary: ContactMatch) -> ContactSensorCfg:
-  return ContactSensorCfg(
-    name=name,
-    primary=ContactMatch(
-      mode="body",
-      pattern=tuple(f"robot/{rc.HAND_PREFIX}{b}" for b in _HAND_SENSOR_BODIES),
-    ),
-    secondary=secondary,
-    fields=("force",),
-    reduce="netforce",
-    history_length=DECIMATION,
-  )
-
-
-def get_hand_table_contact_sensor() -> ContactSensorCfg:
-  """Hand-vs-table contact sensor (table log-barrier / contact penalties)."""
-  return _hand_table_sensor(
-    "hand_table_contact",
-    ContactMatch(mode="geom", pattern="table", entity="arena"),
-  )
-
-
-def _arm_sensor(
-  name: str,
-  secondary: ContactMatch | None,
-  fields: tuple[str, ...],
-  history_length: int,
-) -> ContactSensorCfg:
-  return ContactSensorCfg(
-    name=name,
-    primary=ContactMatch(
-      mode="body", pattern=tuple(f"robot/{b}" for b in rc.ARM_LINK_BODIES)
-    ),
-    secondary=secondary,
-    fields=fields,
-    reduce="netforce",
-    history_length=history_length,
-  )
-
-
-def get_arm_world_contact_sensor() -> ContactSensorCfg:
-  """Arm any-contact flags (arm_collision reward)."""
-  return _arm_sensor("arm_world_contact", None, ("found",), 0)
-
-
-def get_arm_table_contact_sensor() -> ContactSensorCfg:
-  """Arm-vs-table impulse sensor."""
-  return _arm_sensor(
-    "arm_table_contact",
-    ContactMatch(mode="geom", pattern="table", entity="arena"),
-    ("force",),
-    DECIMATION,
-  )
-
-
-def get_arm_object_contact_sensor() -> ContactSensorCfg:
-  """Arm-vs-object impulse sensor."""
-  return _arm_sensor(
-    "arm_object_contact",
-    ContactMatch(mode="subtree", pattern="object", entity="object"),
-    ("force",),
-    DECIMATION,
-  )
-
-
-def get_contact_clip_high() -> tuple[float, ...]:
-  """Per-body impulse clip: 0.2 for the thumb links, 0.1 otherwise."""
-  high = [0.1] * 16
-  for i in rc.CONTACT_THUMB_INDICES:
-    high[i] = 0.2
-  return tuple(high)
-
-
 def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermCfg]:
-  """§F reward stack (reference coeffs from cfg_reg.yaml)."""
+  """Native contact-force reward stack (reference coeffs from cfg_reg.yaml)."""
   keypoints = SceneEntityCfg(
     "robot", body_names=rc.KEYPOINT_BODIES, preserve_order=True
   )
@@ -215,22 +109,10 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
     "thumb_tip_index": rc.KEYPOINT_THUMB_TIP_INDEX,
     "wrist_index": 0,
   }
-  con_weights = contact_weights(
-    rc.CONTACT_TIP_INDICES,
-    rc.CONTACT_THUMB_INDICES,
-    rc.CONTACT_THUMB_TIP_INDEX,
-    0,
-  ).tolist()
-  clip_high = get_contact_clip_high()
-  # Enclosure gate: thumb tip + >=2 non-thumb fingertips must be in contact.
-  finger_tips = tuple(
-    i for i in rc.CONTACT_TIP_INDICES if i != rc.CONTACT_THUMB_TIP_INDEX
-  )
-  gate_params = {
-    "thumb_tip_index": rc.CONTACT_THUMB_TIP_INDEX,
-    "finger_tip_indices": finger_tips,
-    "min_fingers": 2,
-  }
+  pad_w = contact_weights(rc.PAD_BODIES).tolist()
+  pad_clip = force_clips(rc.PAD_BODIES)
+  table_w = contact_weights(HAND_TABLE_BODIES).tolist()
+  table_clip = force_clips(HAND_TABLE_BODIES)
   return {
     "affordance_distance": RewardTermCfg(
       func=mdp.AffordanceDistance,
@@ -253,71 +135,49 @@ def get_dexgrasp_rewards(object_names: tuple[str, ...]) -> dict[str, RewardTermC
       params={"asset_cfg": arm_links, "table_top_z": TABLE_TOP_Z},
     ),
     "affordance_contact": RewardTermCfg(
-      func=mdp.EnclosureGatedContact,
+      func=mdp.PadContact,
       weight=REWARD_COEFFS["affordance_contact"],
-      params={
-        "sensor_name": "hand_object_contact",
-        "pad_parent_indices": rc.PAD_PARENT_INDICES,
-        "mode": "flags",
-        "divisor": 16.0,
-        "weights": con_weights,
-        **gate_params,
-      },
+      params={"sensor_name": "pad_object", "weights": pad_w},
     ),
-    "affordance_impulse": RewardTermCfg(
-      func=mdp.EnclosureGatedContact,
-      weight=REWARD_COEFFS["affordance_impulse"],
+    "affordance_force": RewardTermCfg(
+      func=mdp.PadForce,
+      weight=REWARD_COEFFS["affordance_force"],
       params={
-        "sensor_name": "hand_object_contact",
-        "pad_parent_indices": rc.PAD_PARENT_INDICES,
-        "mode": "impulse_xy",
-        "clip_high": clip_high,
-        "weights": con_weights,
-        **gate_params,
+        "sensor_name": "pad_object",
+        "weights": pad_w,
+        "clip": pad_clip,
+        "use_xy": True,
       },
     ),
     "table_contact": RewardTermCfg(
-      func=mdp.ContactReward,
+      func=mdp.PadContact,
       weight=REWARD_COEFFS["table_contact"],
-      params={
-        "sensor_name": "hand_table_contact",
-        "pad_parent_indices": rc.PAD_PARENT_INDICES,
-        "mode": "flags",
-        "divisor": 16.0,
-        "weights": con_weights,
-      },
+      params={"sensor_name": "hand_table", "weights": table_w},
     ),
-    "table_impulse": RewardTermCfg(
-      func=mdp.ContactReward,
-      weight=REWARD_COEFFS["table_impulse"],
+    "table_force": RewardTermCfg(
+      func=mdp.PadForce,
+      weight=REWARD_COEFFS["table_force"],
       params={
-        "sensor_name": "hand_table_contact",
-        "pad_parent_indices": rc.PAD_PARENT_INDICES,
-        "mode": "impulse",
-        "clip_high": clip_high,
-        "weights": con_weights,
+        "sensor_name": "hand_table",
+        "weights": table_w,
+        "clip": table_clip,
+        "use_xy": False,
       },
     ),
     "arm_contact": RewardTermCfg(
-      func=mdp.ContactReward,
+      func=mdp.ArmContact,
       weight=REWARD_COEFFS["arm_contact"],
-      params={
-        "sensor_names": ("arm_table_contact", "arm_object_contact"),
-        "mode": "flags",
-      },
+      params={"sensor_names": ("arm_table", "arm_object")},
     ),
-    "arm_impulse": RewardTermCfg(
-      func=mdp.ContactReward,
-      weight=REWARD_COEFFS["arm_impulse"],
-      params={
-        "sensor_names": ("arm_table_contact", "arm_object_contact"),
-        "mode": "impulse",
-      },
+    "arm_force": RewardTermCfg(
+      func=mdp.ArmForce,
+      weight=REWARD_COEFFS["arm_force"],
+      params={"sensor_names": ("arm_table", "arm_object")},
     ),
     "arm_collision": RewardTermCfg(
       func=mdp.ArmCollision,
       weight=REWARD_COEFFS["arm_collision"],
-      params={"sensor_name": "arm_world_contact"},
+      params={"sensor_name": "arm_any"},
     ),
     "object_velocity": RewardTermCfg(
       func=mdp.object_velocity,
@@ -376,31 +236,38 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
   if object_name is None and object_names is None and not play:
     cfg.scene.num_envs = oc.ROBUST_DEXGRASP_BASELINE_NUM_ENVS
   cfg.scene.sensors = cfg.scene.sensors + (
-    get_hand_object_contact_sensor(),
-    get_hand_table_contact_sensor(),
-    get_arm_world_contact_sensor(),
-    get_arm_table_contact_sensor(),
-    get_arm_object_contact_sensor(),
+    mdp.pad_object_sensor(),
+    mdp.link_object_sensor(),
+    mdp.hand_table_sensor(),
+    mdp.arm_any_sensor(),
+    mdp.arm_table_sensor(),
+    mdp.arm_object_sensor(),
   )
   cfg.rewards = get_dexgrasp_rewards(selected_object_names)
   # Per-robot observation scopes. preserve_order locks the documented frame
-  # order (KEYPOINT_BODIES / CONTACT_BODIES / ALL_JOINT_NAMES) against model
-  # layout changes, so §F finger weights stay aligned with the obs columns.
+  # order (KEYPOINT_BODIES / ALL_JOINT_NAMES) against model layout changes.
   actor_terms = cfg.observations["actor"].terms
   joints = SceneEntityCfg("robot", joint_names=rc.ALL_JOINT_NAMES, preserve_order=True)
   keypoints = SceneEntityCfg(
     "robot", body_names=rc.KEYPOINT_BODIES, preserve_order=True
   )
+  arm_links = SceneEntityCfg(
+    "robot", body_names=rc.ARM_LINK_BODIES, preserve_order=True
+  )
+  wrist = SceneEntityCfg("robot", body_names=("right_hand",))
+  hand_center = SceneEntityCfg("robot", site_names=(rc.GRASP_CENTER_SITE,))
+  actor_terms["joint_pos"].params["asset_cfg"] = joints
+  actor_terms["pd_error"].params["asset_cfg"] = joints
+  actor_terms["keypoint_heights"].params["asset_cfg"] = keypoints
+  actor_terms["arm_link_heights"].params["asset_cfg"] = arm_links
+  actor_terms["hand_center"].params["asset_cfg"] = hand_center
+  actor_terms["wrist_rot"].params["asset_cfg"] = wrist
+  actor_terms["af_vec"].params["asset_cfg"] = keypoints
+  actor_terms["af_vec"].params["object_names"] = selected_object_names
+
   if not play:
     cfg.metrics.update(
       {
-        "thumb_yaw_last": MetricsTermCfg(
-          func=mdp.joint_pos_mean,
-          params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=("R_thumb_yaw_joint",))
-          },
-          reduce="last",
-        ),
         "object_displacement_last": MetricsTermCfg(
           func=mdp.ObjectDisplacement,
           params={"object_entity": "object"},
@@ -417,46 +284,21 @@ def dexgrasp_ur5e_rh5dg2_env_cfg(
         ),
       }
     )
-  cfg.terminations["hand_below_table"] = TerminationTermCfg(
-    func=mdp.hand_below_table,
-    params={
-      "table_top_z": TABLE_TOP_Z,
-      "asset_cfg": keypoints,
-      "tolerance": HAND_TABLE_TERMINATION_TOLERANCE,
-    },
-  )
-  # Truncation, not termination: the reference has no workspace bound at all and
-  # always runs the full 70 steps, so cutting the return here would add a
-  # negative bias it never had -- and this fires on ~35% of early episodes.
-  # Bootstrapping instead lets the critic learn the state is low-value on its
-  # own, while the reset still guards against unrecoverable off-table spin.
+  # Truncation, not termination: the reference runs all 70 steps, so bootstrap
+  # the return rather than bias it, while resetting a flung/spun object.
   cfg.terminations["object_out_of_workspace"] = TerminationTermCfg(
     func=mdp.object_out_of_workspace,
     params={"bounds": OBJECT_WORKSPACE_BOUNDS, "object_entity": "object"},
     time_out=True,
   )
   cfg.terminations["nan"] = TerminationTermCfg(func=mdp.nan_detection)
-  arm_links = SceneEntityCfg(
-    "robot", body_names=rc.ARM_LINK_BODIES, preserve_order=True
-  )
-  wrist = SceneEntityCfg("robot", body_names=("right_hand",))
-  hand_center = SceneEntityCfg("robot", site_names=(rc.GRASP_CENTER_SITE,))
-  actor_terms["joint_pos"].params["asset_cfg"] = joints
-  actor_terms["pd_error"].params["asset_cfg"] = joints
-  actor_terms["contacts"].params["pad_parent_indices"] = rc.PAD_PARENT_INDICES
-  actor_terms["keypoint_heights"].params["asset_cfg"] = keypoints
-  actor_terms["arm_link_heights"].params["asset_cfg"] = arm_links
-  actor_terms["hand_center"].params["asset_cfg"] = hand_center
-  actor_terms["wrist_orientation"].params["asset_cfg"] = wrist
-  actor_terms["af_vec"].params["asset_cfg"] = keypoints
-  actor_terms["af_vec"].params["object_names"] = selected_object_names
 
   action = cfg.actions["joint_pos"]
   assert isinstance(action, RelativeJointPositionActionCfg)
   action.scale = ACTION_SCALE
 
   # Replace the skeleton's default-pose resets with the sampled object pose +
-  # analytic-IK pre-grasp (§C). Arena/base placement stays as is.
+  # analytic-IK pre-grasp. Arena/base placement stays as is.
   del cfg.events["reset_robot_joints"]
   del cfg.events["reset_object"]
   cfg.events["reset_grasp_pose"] = EventTermCfg(

@@ -52,7 +52,7 @@ def test_reset_places_arm_at_pregrasp():
   min_forearm_z = origins[:, 2] + ARM_MOUNT_Z + MIN_FOREARM_HEIGHT_ABOVE_BASE
   assert torch.all(forearm_z_w >= min_forearm_z)
   # Object rests on the table with the 2 mm spawn clearance (z fixed by sampler).
-  low = oc.PHASE1_OBJECTS[SKELETON_OBJECT].lowest_point
+  low = oc.PHASE1_OBJECTS[SKELETON_OBJECT].placement_lowest_point
   assert torch.allclose(
     obj_w[:, 2], torch.full((4,), TABLE_TOP_Z - low + 0.002), atol=1e-3
   )
