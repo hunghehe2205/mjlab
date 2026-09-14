@@ -34,6 +34,8 @@ def _add_position_actuator(
   a.biasprm = biasprm
   a.forcelimited = True
   a.forcerange = np.array([-effort, effort])
+  # Slider range = joint range, so the control panel spans the full motion.
+  a.inheritrange = 1.0
 
 
 def _add_scene_visuals(spec: mujoco.MjSpec) -> None:
