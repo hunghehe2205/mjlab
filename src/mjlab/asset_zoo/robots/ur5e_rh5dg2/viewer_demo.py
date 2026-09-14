@@ -36,6 +36,35 @@ def _add_position_actuator(
   a.forcerange = np.array([-effort, effort])
 
 
+def _add_scene_visuals(spec: mujoco.MjSpec) -> None:
+  """Brighten the standalone scene: headlight, lights, skybox and a floor."""
+  spec.visual.headlight.ambient = np.array([0.5, 0.5, 0.5])
+  spec.visual.headlight.diffuse = np.array([0.7, 0.7, 0.7])
+  spec.visual.headlight.specular = np.array([0.1, 0.1, 0.1])
+
+  sky = spec.add_texture()
+  sky.name = "skybox"
+  sky.type = mujoco.mjtTexture.mjTEXTURE_SKYBOX
+  sky.builtin = mujoco.mjtBuiltin.mjBUILTIN_GRADIENT
+  sky.rgb1 = np.array([0.3, 0.5, 0.7])
+  sky.rgb2 = np.array([0.0, 0.0, 0.0])
+  sky.width = 512
+  sky.height = 3072
+
+  for x, y, shadow in ((1.5, 1.5, True), (-1.5, -1.5, False)):
+    light = spec.worldbody.add_light()
+    light.pos = np.array([x, y, 3.0])
+    light.dir = np.array([-x, -y, -3.0])
+    light.diffuse = np.array([0.4, 0.4, 0.4])
+    light.castshadow = shadow
+
+  floor = spec.worldbody.add_geom()
+  floor.name = "floor"
+  floor.type = mujoco.mjtGeom.mjGEOM_PLANE
+  floor.size = np.array([0.0, 0.0, 0.05])
+  floor.rgba = np.array([0.3, 0.3, 0.35, 1.0])
+
+
 def _arm_gains(joint: str) -> tuple[float, float, float]:
   for cfg in ur5e.ARM_ACTUATORS:
     assert isinstance(cfg, BuiltinPositionActuatorCfg)
@@ -68,6 +97,7 @@ def build_model() -> tuple[mujoco.MjModel, dict[str, float]]:
   scene = get_workstation_spec()
   frame = scene.worldbody.add_frame(pos=(0.0, 0.0, ARM_MOUNT_Z), quat=combo.BASE_ROT)
   frame.attach_body(robot.body("base"), "robot_", "")
+  _add_scene_visuals(scene)
   opt = scene.option
   opt.timestep = 0.005
   opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
