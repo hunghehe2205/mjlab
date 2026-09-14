@@ -21,6 +21,7 @@ from mjlab.envs.mdp import (
   joint_pos_rel,
   joint_vel_rel,
   reset_joints_by_offset,
+  reset_root_state_uniform,
   time_out,
 )
 from mjlab.envs.mdp.actions import JointPositionActionCfg
@@ -46,6 +47,7 @@ def _alive(env: ManagerBasedRlEnv) -> torch.Tensor:
 
 def ur5e_rh5dg2_view_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   robot_cfg = SceneEntityCfg("robot", joint_names=(".*",))
+  props_cfg = SceneEntityCfg("props")
 
   actor_terms = {
     "joint_pos": ObservationTermCfg(func=joint_pos_rel),
@@ -66,6 +68,17 @@ def ur5e_rh5dg2_view_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   }
 
   events = {
+    # Position each env's fixed-base entities at their env origin.
+    "reset_robot_base": EventTermCfg(
+      func=reset_root_state_uniform,
+      mode="reset",
+      params={"pose_range": {}, "velocity_range": {}, "asset_cfg": robot_cfg},
+    ),
+    "reset_props_base": EventTermCfg(
+      func=reset_root_state_uniform,
+      mode="reset",
+      params={"pose_range": {}, "velocity_range": {}, "asset_cfg": props_cfg},
+    ),
     "reset_robot_joints": EventTermCfg(
       func=reset_joints_by_offset,
       mode="reset",
