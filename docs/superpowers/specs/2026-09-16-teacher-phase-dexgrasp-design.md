@@ -1,13 +1,15 @@
 # Teacher grasp-and-lift — UR5e + rh5dg2 / mjlab
 
-Updated: 2026-09-20. Supersedes the grasp-only/scripted-lift draft.
+Updated: 2026-09-24. Supersedes the grasp-only/scripted-lift draft.
 
 ## Scope and acceptance
 
-Teacher controls all 24 arm/hand joints from a fixed pre-grasp, grasps one
+Teacher controls all 24 arm/hand joints from a sampled pre-grasp, grasps one
 primitive, lifts it by 0.10 m and holds it for 3 continuous seconds. Success
-terminates the episode. Transport, lowering, release, student, domain
-randomization and real deployment are outside this implementation.
+terminates the episode. The object placement and the matching pre-grasp are
+randomized per reset (RobustDexGrasp reset pipeline). Transport, lowering,
+release, student, physics domain randomization and real deployment are outside
+this implementation.
 
 This is an adaptation of RobustDexGrasp: its original teacher trains grasp-only
 and uses a separately commanded lift for evaluation. Our lift is part of the
@@ -16,10 +18,32 @@ it must not override policy actions during training.
 
 ## Scene and physics baseline
 
-- Existing UR5e/rh5dg2 entity and workstation; fixed pre-grasp and object pose.
+- Existing UR5e/rh5dg2 entity and workstation.
+- Sampled pre-grasp (`grasp/pregrasp.py`), mirrored from the reference so the
+  workspace lies in +Y of the arm base:
+  - Object xy: polar angle 0.3π–0.7π, distance 0.45–0.75 m, |x| < 0.25 m.
+    Training mixes uniform and Beta(0.5, 0.5) edge-biased draws 50/50; play is
+    uniform. Yaw uniform in [-π, π]; the box rests on the table.
+  - Visible points: box surface points whose faces point toward a virtual
+    camera at (-0.035, 0.58, 1.531) m. Their centroid is the affordance center.
+  - Top approach (palm down). The wrist frame `right_hand` has +X = palm normal
+    toward the object and +Z = finger axis; 10 finger-axis rolls over the half
+    plane facing away from the robot.
+  - The grasp reference `HAND_CENTER` = (0.125, 0.005, 0.190) m in the wrist
+    frame (box center at pre-close) is placed 0.25 m from the affordance center
+    along the approach.
+  - Damped least-squares IK per roll, seeded from a collision-free palm-down
+    branch and rejected outside the 0.9 soft limits. Score = 5 x grasp width +
+    |wrist_2 - π/2| + 0.5(|wrist_2| - 3.2) among widths below 0.18 m.
+  - Reject any robot-world contact within 5 mm and any robot self-penetration
+    (the arm mount on the pedestal is excluded).
+  - 1024 placements are solved once at startup; each reset draws one uniformly.
+- Fixed 18-joint pre-shape: thumb yaw 1.2 rad with mcp/pip/dip 0.08/0.06/0.06 rad
+  (opened for a 4.1 cm thumb-box gap at pre-close), index/middle yaw 0, other
+  flexion 0.1 rad. All values lie inside the 0.9 soft limits.
 - MVP object: box, half extents (0.03, 0.03, 0.06) m, mass 0.08 kg,
-  friction 1.0, condim 4.
-  Position (-0.10, 0.48, TABLE_TOP_Z + 0.06), identity orientation.
+  friction 1.0, condim 4. The nominal placement (-0.10, 0.48,
+  TABLE_TOP_Z + 0.06) with identity orientation is used by the probe.
 - Keep robot actuator gains/armature from the entity configs. Build the probe
   from these configs too, avoiding the standalone viewer's missing hand armature.
 - Teacher-local collision variant: replace DIP cylinder pads with inscribed
@@ -34,6 +58,12 @@ it must not override policy actions during training.
   no object weld, teleport, gravity cancellation or attachment during rollout.
 - Probe must start without penetration and demonstrate >=0.10 m lift, >=3 s hold
   with hand contact and no table support. Record the backend and measured result.
+- Probe acceptance also checks contact depths at 20 Hz: hand/object and
+  object/table <=3 mm, other robot contacts <=1 mm. During the open-hand approach,
+  hand/object depth <=0.01 mm and object horizontal displacement <=1 mm.
+  These are numerical regression tolerances for the soft-contact model, not
+  rigid-contact guarantees or maxima over all physics substeps. Collision
+  ownership must use body IDs, including unnamed UR5 collision geoms.
 
 ## Actions and reset
 
@@ -47,10 +77,11 @@ all physics substeps; do not recompute relative to current q every substep.
 The target is in radians and stored explicitly. Reset raw action to zero and
 target to the reset joint pose, including partial environment resets.
 
-Reset robot, props and object with env origins; restore robot joints and zero
-velocities. Reset success counters and action target for exactly the selected
-envs. z0 is the nominal resting box center on the table, not a noisy contact
-transient. Joint limits and pre-grasp are checked by the physics probe.
+Reset robot and props with env origins; the pre-grasp event writes the sampled
+object pose and the arm/hand joints with zero velocities and stores each env's
+object start position. Reset success counters and action target for exactly the
+selected envs. z0 is the resting box center on the table, not a noisy contact
+transient. Horizontal displacement is measured from the stored start position.
 
 ## Privileged observations and frames
 
@@ -136,6 +167,8 @@ throughput or learning convergence. No training-success claim without a run.
 ## Implementation sequence
 
 1. Lock these semantics and record the collision-free pre-grasp/probe outcome.
+   The probe starts from the sampled pre-grasp for the nominal placement,
+   approaches along a straight IK line, closes and lifts vertically.
 2. Add the primitive and reproducible scripted physics probe.
 3. Add/register teacher, metrics and targeted tests. Run formatting, lint and
    both type checkers; run relevant tests. GPU validation remains explicit if

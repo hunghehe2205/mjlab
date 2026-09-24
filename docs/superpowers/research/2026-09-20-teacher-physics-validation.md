@@ -2,6 +2,16 @@
 
 Ngày kiểm chứng: 2026-09-20.
 
+> Cập nhật 2026-09-24: kiểm tra bổ sung phát hiện probe đẩy vật và gây
+> penetration đáng kể trong pha approach, trước khi đóng ngón. Kết quả lift/hold
+> bên dưới vẫn đúng theo các điều kiện đã đo, nhưng chưa đủ để kết luận toàn bộ
+> rollout đạt chất lượng vật lý. Xem
+> [review pre-grasp và số đo mới](2026-09-24-pregrasp-review.md).
+> Cấu hình úp bàn tay thay thế và kết quả kiểm chứng mới nằm trong
+> [báo cáo palm-down](2026-09-24-palm-down-pregrasp.md).
+> Hiện tại pre-grasp được lấy mẫu ngẫu nhiên theo pipeline của RobustDexGrasp:
+> xem [pre-grasp lấy mẫu](2026-09-24-pregrasp-sampling.md).
+
 ## Kết luận và phạm vi
 
 Đã triển khai ba bước: chốt spec, kiểm chứng grasp/lift bằng điều khiển scripted,

@@ -1,0 +1,18 @@
+{
+  "backend": "native",
+  "device": "cpu",
+  "success": true,
+  "initial_penetration_m": 5.551115123125783e-17,
+  "final_lift_m": 0.13838232254159522,
+  "hold_seconds": 3.0,
+  "object_speed_m_s": 0.0006690405612354001,
+  "contact_force_n": 1.556075715496153,
+  "rollout": {
+    "hand_object_penetration_m": 0.0013183393844016203,
+    "object_table_penetration_m": 0.0017965913445748057,
+    "undesired_penetration_m": 0.0,
+    "approach_object_displacement_m": 1.4129727200731292e-10,
+    "approach_hand_object_penetration_m": 0.0,
+    "peak_hand_force_n": 3.711211098839135
+  }
+}
