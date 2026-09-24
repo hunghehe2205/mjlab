@@ -1,4 +1,4 @@
-"""Replay close/lift waypoints through the same actuators used by the teacher.
+"""Replay a scripted grasp from the sampled nominal pre-grasp.
 
 Run with ``uv run python -m mjlab.tasks.ur5e_rh5dg2.grasp.physics_probe``.
 The probe uses no object attachment or state writes after initialization.
@@ -24,22 +24,27 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   CLOSED_HAND,
   FINGERS,
   FORCE_THRESHOLD,
-  GRASP_ARM,
   HAND_ACTION_SCALE,
+  HAND_CENTER,
   HOLD_TIME,
-  LIFT_ARM,
   LIFT_HEIGHT,
   OBJECT_POS,
   OPEN_HAND,
-  PREGRASP_ARM,
+  STANDOFF,
 )
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.actions import GraspAction
+from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.events import PregraspReset
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import (
   lift_height,
   normal_force,
   object_speed,
 )
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.terminations import LiftSuccess
+from mjlab.tasks.ur5e_rh5dg2.grasp.pregrasp import (
+  PregraspSolver,
+  box_surface_points,
+  yaw_quat,
+)
 from mjlab.tasks.ur5e_rh5dg2.grasp.teacher_env_cfg import teacher_env_cfg
 
 
@@ -53,27 +58,144 @@ class ProbeResult:
   hold_seconds: float
   object_speed_m_s: float
   contact_force_n: float
+  rollout: RolloutAudit
 
 
-def scripted_target(time: float) -> np.ndarray:
-  """Approach 0-2 s, close 2-4 s, lift 5-7 s, then hold."""
-  approach = np.clip(time / 2.0, 0.0, 1.0)
-  close = np.clip((time - 2.0) / 2.0, 0.0, 1.0)
-  lift = np.clip((time - 5.0) / 2.0, 0.0, 1.0)
-  arm = (
-    np.array(PREGRASP_ARM)
-    + (np.array(GRASP_ARM) - PREGRASP_ARM) * approach
-    + (np.array(LIFT_ARM) - GRASP_ARM) * lift
-  )
-  hand = np.array(OPEN_HAND) + (np.array(CLOSED_HAND) - OPEN_HAND) * close
-  return np.concatenate([arm, hand])
+@dataclass
+class RolloutAudit:
+  """Contact-depth maxima sampled at the 20 Hz control boundaries.
+
+  The 3 mm contact-depth cap is a numerical regression guard for this soft-contact
+  primitive, not a claim of rigid contact or a bound on unsampled substeps.
+  """
+
+  hand_object_penetration_m: float = 0.0
+  object_table_penetration_m: float = 0.0
+  undesired_penetration_m: float = 0.0
+  approach_object_displacement_m: float = 0.0
+  approach_hand_object_penetration_m: float = 0.0
+  peak_hand_force_n: float = 0.0
+
+  @property
+  def passed(self) -> bool:
+    return (
+      self.hand_object_penetration_m <= 0.003
+      and self.object_table_penetration_m <= 0.003
+      and self.undesired_penetration_m <= 0.001
+      and self.approach_object_displacement_m <= 0.001
+      and self.approach_hand_object_penetration_m <= 1e-5
+    )
+
+  def update(
+    self,
+    model: mujoco.MjModel,
+    geom: np.ndarray,
+    distance: np.ndarray,
+    object_pos: np.ndarray,
+    approach: bool,
+    hand_force: float,
+  ) -> None:
+    object_id = model.geom("object/collision").id
+    table_id = model.geom("props/table_geom").id
+    hand_ids = np.array(
+      [
+        g
+        for g in range(model.ngeom)
+        if model.body(model.geom_bodyid[g]).name.startswith(
+          ("robot/R_", "robot/right_hand")
+        )
+      ]
+    )
+    robot_ids = np.array(
+      [
+        g
+        for g in range(model.ngeom)
+        if model.body(model.geom_bodyid[g]).name.startswith("robot/")
+      ]
+    )
+    obj = (geom == object_id).any(axis=-1)
+    table = (geom == table_id).any(axis=-1)
+    hand = np.isin(geom, hand_ids).any(axis=-1)
+    robot = np.isin(geom, robot_ids)
+    # Body ownership also covers the UR5 collision geoms that have no names.
+    undesired = robot.any(axis=-1) & ~(obj & hand)
+
+    def depth(mask: np.ndarray) -> float:
+      return float(max(0.0, -distance[mask].min(initial=0.0)))
+
+    hand_depth = depth(obj & hand)
+    self.hand_object_penetration_m = max(self.hand_object_penetration_m, hand_depth)
+    self.object_table_penetration_m = max(
+      self.object_table_penetration_m, depth(obj & table)
+    )
+    self.undesired_penetration_m = max(self.undesired_penetration_m, depth(undesired))
+    self.peak_hand_force_n = max(self.peak_hand_force_n, hand_force)
+    if approach:
+      self.approach_hand_object_penetration_m = max(
+        self.approach_hand_object_penetration_m, hand_depth
+      )
+      self.approach_object_displacement_m = max(
+        self.approach_object_displacement_m,
+        float(np.linalg.norm(object_pos[:2] - OBJECT_POS[:2])),
+      )
 
 
-def initial_penetration(model: mujoco.MjModel) -> float:
-  data = mujoco.MjData(model)
-  mujoco.mj_resetDataKeyframe(model, data, 0)
-  mujoco.mj_forward(model, data)
-  return max(0.0, -min((c.dist for c in data.contact), default=0.0))
+APPROACH_END, CLOSE_END, LIFT_START, LIFT_END = 3.0, 5.0, 6.0, 8.0
+LIFT_CLEARANCE = 0.06
+
+
+@dataclass
+class ScriptedGrasp:
+  """Straight-line approach, close and vertical lift for one placement."""
+
+  approach: np.ndarray  # [K, 6] arm poses every centimetre along the approach.
+  lift: np.ndarray  # [6]
+
+  @classmethod
+  def solve(
+    cls,
+    model: mujoco.MjModel,
+    pos: np.ndarray | None = None,
+    quat: np.ndarray | None = None,
+  ) -> ScriptedGrasp:
+    """Defaults to the nominal placement at OBJECT_POS with zero yaw."""
+    pos = np.array(OBJECT_POS) if pos is None else pos
+    quat = yaw_quat(0.0) if quat is None else quat
+    solver = PregraspSolver(model)
+    surface = box_surface_points(np.random.default_rng(0))
+    start = solver.solve(pos, quat, surface)
+    if start is None:
+      raise RuntimeError("No feasible pre-grasp for this placement.")
+    rotation = start.rotation
+    begin = solver.wrist_pose(start.center, rotation, STANDOFF)
+    end = pos - rotation @ np.array(HAND_CENTER)
+    count = int(np.ceil(np.linalg.norm(end - begin) / 0.01)) + 1
+    arms = [start.arm]
+    for point in np.linspace(begin, end, count)[1:]:
+      arm = solver.ik(point, rotation, arms[-1])
+      if arm is None:
+        raise RuntimeError("Approach line leaves the reachable workspace.")
+      arms.append(arm)
+    top = end + np.array([0.0, 0.0, LIFT_HEIGHT + LIFT_CLEARANCE])
+    lift = solver.ik(top, rotation, arms[-1])
+    if lift is None:
+      raise RuntimeError("Lift pose is unreachable.")
+    return cls(np.array(arms), lift)
+
+  def target(self, time: float) -> np.ndarray:
+    """Approach, close, pause, lift, then hold."""
+    s = np.clip(time / APPROACH_END, 0.0, 1.0) * (len(self.approach) - 1)
+    i = min(int(s), len(self.approach) - 2)
+    arm = self.approach[i] + (self.approach[i + 1] - self.approach[i]) * (s - i)
+    lift = np.clip((time - LIFT_START) / (LIFT_END - LIFT_START), 0.0, 1.0)
+    arm = arm + (self.lift - self.approach[-1]) * lift
+    close = np.clip((time - APPROACH_END) / (CLOSE_END - APPROACH_END), 0.0, 1.0)
+    hand = np.array(OPEN_HAND) + (np.array(CLOSED_HAND) - OPEN_HAND) * close
+    return np.concatenate([arm, hand])
+
+
+def penetration(distances: np.ndarray) -> float:
+  return float(max(0.0, -distances.min(initial=0.0)))
 
 
 def run_native_probe() -> ProbeResult:
@@ -81,6 +203,7 @@ def run_native_probe() -> ProbeResult:
   cfg.scene.num_envs = 1
   model = Scene(cfg.scene, device="cpu").compile()
   cfg.sim.mujoco.apply(model)
+  script = ScriptedGrasp.solve(model)
   data = mujoco.MjData(model)
   mujoco.mj_resetDataKeyframe(model, data, 0)
   initial_joints = cfg.scene.entities["robot"].init_state.joint_pos
@@ -88,6 +211,8 @@ def run_native_probe() -> ProbeResult:
   joint_names = tuple(initial_joints)
   joint_ids = np.array([model.joint(f"robot/{name}").id for name in joint_names])
   qpos_ids = model.jnt_qposadr[joint_ids]
+  data.qpos[qpos_ids] = script.target(0.0)
+  mujoco.mj_forward(model, data)
   ctrl_ids = np.array(
     [int(np.flatnonzero(model.actuator_trnid[:, 0] == j)[0]) for j in joint_ids]
   )
@@ -95,7 +220,7 @@ def run_native_probe() -> ProbeResult:
   initial_q = data.qpos[qpos_ids]
   if np.any(initial_q < limits[:, 0]) or np.any(initial_q > limits[:, 1]):
     raise ValueError("Pre-grasp joint pose exceeds hard joint limits.")
-  penetration = initial_penetration(model)
+  initial = penetration(data.contact.dist)
   obj = model.joint("object/free_joint")
   qadr, vadr = int(obj.qposadr[0]), int(obj.dofadr[0])
   step_dt = cfg.sim.mujoco.timestep * cfg.decimation
@@ -103,8 +228,9 @@ def run_native_probe() -> ProbeResult:
   count = 0
   force = np.zeros(6)
   rise = speed = peak_force = 0.0
+  audit = RolloutAudit()
   for step in range(round(12.0 / step_dt)):
-    goal = scripted_target(step * step_dt)
+    goal = script.target(step * step_dt)
     scale = np.array([ARM_ACTION_SCALE] * 6 + [HAND_ACTION_SCALE] * 18)
     q = data.qpos[qpos_ids]
     target = q + np.clip(goal - q, -scale, scale)
@@ -128,6 +254,14 @@ def run_native_probe() -> ProbeResult:
           if force[0] > FORCE_THRESHOLD:
             touching.add(finger)
     rise = float(data.qpos[qadr + 2] - OBJECT_POS[2])
+    audit.update(
+      model,
+      data.contact.geom,
+      data.contact.dist,
+      data.qpos[qadr : qadr + 3],
+      approach=step * step_dt < APPROACH_END,
+      hand_force=float(peak_force),
+    )
     speed = float(np.linalg.norm(data.qvel[vadr : vadr + 3]))
     angular_speed = np.linalg.norm(data.qvel[vadr + 3 : vadr + 6])
     stable = (
@@ -143,12 +277,13 @@ def run_native_probe() -> ProbeResult:
   return ProbeResult(
     "native",
     "cpu",
-    count >= required and penetration < 1e-5,
-    penetration,
+    count >= required and initial < 1e-5 and audit.passed,
+    initial,
     rise,
     count * step_dt,
     speed,
     float(peak_force),
+    audit,
   )
 
 
@@ -159,17 +294,43 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
   env = ManagerBasedRlEnv(cfg, device=device)
   try:
     env.reset()
+    script = ScriptedGrasp.solve(env.sim.mj_model)
+    reset = env.event_manager.get_term_cfg("reset_pregrasp").func
+    assert isinstance(reset, PregraspReset)
+
+    def as_row(x) -> torch.Tensor:
+      return torch.tensor(x, device=device, dtype=torch.float32)[None]
+
+    reset.write(
+      env,
+      torch.arange(1, device=device),
+      as_row(OBJECT_POS),
+      as_row(yaw_quat(0.0)),
+      as_row(script.approach[0]),
+    )
+    env.sim.forward()
     ncon = int(wp.to_torch(env.sim.wp_data.nacon)[0].item())
-    distances = wp.to_torch(env.sim.wp_data.contact.dist)[:ncon]
-    penetration = max(0.0, -distances.min().item()) if ncon else 0.0
+    initial = penetration(
+      wp.to_torch(env.sim.wp_data.contact.dist)[:ncon].cpu().numpy()
+    )
     action = env.action_manager.get_term("joint_pos")
     assert isinstance(action, GraspAction)
+    audit = RolloutAudit()
     for step in range(env.max_episode_length):
       goal = torch.tensor(
-        scripted_target(step * env.step_dt), device=device, dtype=torch.float32
+        script.target(step * env.step_dt), device=device, dtype=torch.float32
       )[None, :]
       q = env.scene["robot"].data.joint_pos[:, action.target_ids]
       _, _, terminated, truncated, _ = env.step((goal - q) / action.scale)
+      ncon = int(wp.to_torch(env.sim.wp_data.nacon)[0].item())
+      audit.update(
+        env.sim.mj_model,
+        wp.to_torch(env.sim.wp_data.contact.geom)[:ncon].cpu().numpy(),
+        wp.to_torch(env.sim.wp_data.contact.dist)[:ncon].cpu().numpy(),
+        env.scene["object"].data.root_link_pos_w[0].cpu().numpy(),
+        approach=step * env.step_dt < APPROACH_END,
+        hand_force=normal_force(env, "hand_object").max().item(),
+      )
       if (terminated | truncated).any():
         break
     success = env.termination_manager.get_term("success").item()
@@ -178,12 +339,13 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
     return ProbeResult(
       "warp",
       device,
-      bool(success) and penetration < 1e-5,
-      penetration,
+      bool(success) and initial < 1e-5 and audit.passed,
+      initial,
       lift_height(env).item(),
       hold.count.item() * env.step_dt,
       object_speed(env).item(),
       normal_force(env, "hand_object").max().item(),
+      audit,
     )
   finally:
     env.close()

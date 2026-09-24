@@ -33,7 +33,11 @@ This fork keeps the UR5e + rh5dg2 dexterous grasping tasks only.
 
 ### 1. Grasp-and-Lift Teacher
 
-Train the UR5e + rh5dg2 hand to grasp a box, lift it 10 cm and hold it steady:
+Train the UR5e + rh5dg2 hand to grasp a box, lift it 10 cm and hold it steady.
+Each reset follows the RobustDexGrasp pre-grasp pipeline: a random box placement
+and yaw, a palm-down approach 25 cm from the visible surface, the best of 10 wrist
+rolls by IK and grasp width, and collision filtering. A pool of 1024 pre-grasps
+is solved once at startup.
 
 ```bash
 uv run train Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --env.scene.num-envs 256
@@ -57,7 +61,9 @@ uv run play Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --wandb-run-path your-org/mjlab/run-
 
 ### 2. Scripted Physics Probe
 
-Verify that the scene can physically achieve the grasp before training:
+Verify that the scene can physically achieve the grasp before training. The probe
+starts from the sampled pre-grasp of the nominal box placement, approaches in a
+straight line, closes the hand and lifts:
 
 ```bash
 uv run python -m mjlab.tasks.ur5e_rh5dg2.grasp.physics_probe --backend warp --device cuda:0
@@ -71,8 +77,6 @@ Use built-in agents to sanity check your MDP before training:
 uv run play Mjlab-Your-Task-Id --agent zero  # Sends zero actions
 uv run play Mjlab-Your-Task-Id --agent random  # Sends uniform random actions
 ```
-
-When running motion-tracking tasks, add `--registry-name your-org/motions/motion-name` to the command.
 
 
 ## Documentation

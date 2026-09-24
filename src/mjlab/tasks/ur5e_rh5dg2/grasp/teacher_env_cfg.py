@@ -11,7 +11,7 @@ from mjlab.asset_zoo.robots.universal_robots_ur5e.ur5e_constants import (
 from mjlab.asset_zoo.scenes.workstation import get_workstation_spec
 from mjlab.entity import EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
-from mjlab.envs.mdp import reset_joints_by_offset, reset_root_state_uniform, time_out
+from mjlab.envs.mdp import reset_root_state_uniform, time_out
 from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.metrics_manager import MetricsTermCfg
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
@@ -25,6 +25,7 @@ from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   ARM_ACTION_SCALE,
   ARM_BODIES,
+  ARM_IK_SEED,
   BOX_SIZE,
   FINGER_ROOTS,
   HAND_ACTION_SCALE,
@@ -33,7 +34,7 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   LIFT_HEIGHT,
   OBJECT_POS,
   OPEN_HAND,
-  PREGRASP_ARM,
+  POOL_SIZE,
   TIP_BODIES,
 )
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp import (
@@ -43,6 +44,7 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.mdp import (
   terminations,
 )
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.actions import GraspActionCfg
+from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.events import PregraspReset
 from mjlab.tasks.ur5e_rh5dg2.grasp.robot import teacher_robot_spec
 from mjlab.tasks.ur5e_rh5dg2.view_env_cfg import ur5e_rh5dg2_ppo_runner_cfg
 from mjlab.terrains import TerrainEntityCfg
@@ -62,7 +64,7 @@ def teacher_env_cfg(
     *(f"{name}_joint" for name in HAND_BODIES[1:]),
   )
   robot.init_state.joint_pos = dict(
-    zip(joint_names, (*PREGRASP_ARM, *OPEN_HAND), strict=True)
+    zip(joint_names, (*ARM_IK_SEED, *OPEN_HAND), strict=True)
   )
   obj = get_box_cfg(BOX_SIZE, mass=0.08)
   obj.init_state.pos = OBJECT_POS
@@ -127,16 +129,12 @@ def teacher_env_cfg(
       mode="reset",
       params={"pose_range": {}, "asset_cfg": SceneEntityCfg(name)},
     )
-    for name in ("robot", "props", "object")
+    for name in ("robot", "props")
   }
-  events["reset_joints"] = EventTermCfg(
-    func=reset_joints_by_offset,
+  events["reset_pregrasp"] = EventTermCfg(
+    func=PregraspReset,
     mode="reset",
-    params={
-      "position_range": (0.0, 0.0),
-      "velocity_range": (0.0, 0.0),
-      "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
-    },
+    params={"pool_size": POOL_SIZE, "edge_biased": not play},
   )
   obs = {
     "state": ObservationTermCfg(

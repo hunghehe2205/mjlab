@@ -8,7 +8,8 @@ import torch
 
 from mjlab.asset_zoo.scenes.workstation import TABLE_TOP_Z
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.tasks.ur5e_rh5dg2.grasp.constants import FORCE_THRESHOLD, OBJECT_POS
+from mjlab.tasks.ur5e_rh5dg2.grasp.constants import FORCE_THRESHOLD
+from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.events import object_start
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import (
   box_surface_vectors,
   finger_contacts,
@@ -75,7 +76,7 @@ def undesired_contact(env: ManagerBasedRlEnv) -> torch.Tensor:
 
 def horizontal_displacement(env: ManagerBasedRlEnv) -> torch.Tensor:
   pos = env.scene["object"].data.root_link_pos_w - env.scene.env_origins
-  return (pos[:, :2] - pos.new_tensor(OBJECT_POS[:2])).square().sum(dim=-1)
+  return (pos[:, :2] - object_start(env)[:, :2]).square().sum(dim=-1)
 
 
 def horizontal_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:

@@ -10,10 +10,25 @@ from conftest import get_test_device
 
 from mjlab.asset_zoo.robots.ur5e_rh5dg2.ur5e_rh5dg2_constants import get_spec
 from mjlab.envs import ManagerBasedRlEnv
-from mjlab.tasks.ur5e_rh5dg2.grasp.constants import LIFT_HEIGHT, OBJECT_POS
-from mjlab.tasks.ur5e_rh5dg2.grasp.mdp import rewards, signals, terminations
+from mjlab.scene import Scene
+from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
+  HAND_CENTER,
+  LIFT_HEIGHT,
+  OBJECT_ANGLE,
+  OBJECT_DISTANCE,
+  OBJECT_MAX_ABS_X,
+  OBJECT_POS,
+)
+from mjlab.tasks.ur5e_rh5dg2.grasp.mdp import events, rewards, signals, terminations
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.actions import GraspAction
-from mjlab.tasks.ur5e_rh5dg2.grasp.physics_probe import run_native_probe, run_warp_probe
+from mjlab.tasks.ur5e_rh5dg2.grasp.physics_probe import (
+  APPROACH_END,
+  RolloutAudit,
+  ScriptedGrasp,
+  run_native_probe,
+  run_warp_probe,
+)
+from mjlab.tasks.ur5e_rh5dg2.grasp.pregrasp import PregraspSolver, build_pool
 from mjlab.tasks.ur5e_rh5dg2.grasp.robot import teacher_robot_spec
 from mjlab.tasks.ur5e_rh5dg2.grasp.teacher_env_cfg import teacher_env_cfg
 
@@ -33,7 +48,27 @@ def env(teacher):
   return teacher
 
 
+def place_same(env):
+  """Put every env in the first pooled placement."""
+  term = env.event_manager.get_term_cfg("reset_pregrasp").func
+  assert isinstance(term, events.PregraspReset)
+  n = env.num_envs
+  term.write(
+    env,
+    torch.arange(n, device=env.device),
+    term.object_pos[:1].expand(n, -1),
+    term.object_quat[:1].expand(n, -1),
+    term.arm_pos[:1].expand(n, -1),
+  )
+  env.sim.forward()
+  env.sim.sense()
+  env.scene.update(0.0)
+  env.action_manager.get_term("joint_pos").reset()
+  env.observation_manager.reset(torch.arange(n, device=env.device))
+
+
 def test_translated_env_observations_and_steps(env):
+  place_same(env)
   obs = env.get_observations()
   assert env.action_manager.total_action_dim == 24
   assert obs["actor"].shape == (2, 259)
@@ -67,7 +102,9 @@ def test_action_target_held_clipped_and_partial_reset(env):
   ids = torch.tensor([0], device=env.device)
   other_q = robot.data.joint_pos[1].clone()
   env.reset(env_ids=ids)
-  torch.testing.assert_close(action.target[0], robot.data.default_joint_pos[0])
+  torch.testing.assert_close(
+    action.target[0], robot.data.joint_pos[0, action.target_ids]
+  )
   torch.testing.assert_close(action.target[1], expected[1])
   torch.testing.assert_close(robot.data.joint_pos[1], other_q)
   assert (action.raw_action[0] == 0).all()
@@ -166,30 +203,107 @@ def test_partial_reset_restores_object_and_clears_contacts(env):
   pose[:, 0] += 0.1
   obj.write_root_link_pose_to_sim(pose)
   env.sim.forward()
+  start = events.object_start(env).clone()
   env.reset(env_ids=torch.tensor([0], device=env.device))
   local = obj.data.root_link_pos_w - env.scene.env_origins
-  torch.testing.assert_close(local[0], local.new_tensor(OBJECT_POS))
-  torch.testing.assert_close(
-    local[1], local.new_tensor(OBJECT_POS) + local.new_tensor([0.1, 0, 0])
-  )
+  torch.testing.assert_close(local[0], events.object_start(env)[0])
+  torch.testing.assert_close(local[1], start[1] + local.new_tensor([0.1, 0, 0]))
   assert not signals.finger_contacts(env)[0].any()
 
 
-def test_scripted_native_lift_without_initial_penetration():
+def test_pregrasp_pool_is_in_region_palm_down_and_collision_free():
+  cfg = teacher_env_cfg()
+  cfg.scene.num_envs = 1
+  model = Scene(cfg.scene, device="cpu").compile()
+  pool = build_pool(model, 16, seed=0, edge_biased=True)
+  xy = pool.object_pos[:, :2]
+  angle = np.arctan2(xy[:, 1], xy[:, 0])
+  distance = np.linalg.norm(xy, axis=-1)
+  assert ((angle >= OBJECT_ANGLE[0]) & (angle <= OBJECT_ANGLE[1])).all()
+  assert ((distance >= OBJECT_DISTANCE[0]) & (distance <= OBJECT_DISTANCE[1])).all()
+  assert (np.abs(xy[:, 0]) < OBJECT_MAX_ABS_X).all()
+  np.testing.assert_allclose(pool.object_pos[:, 2], OBJECT_POS[2])
+  solver = PregraspSolver(model)
+  lo, hi = solver.arm_limits.T
+  for pos, quat, arm in zip(
+    pool.object_pos, pool.object_quat, pool.arm_pos, strict=True
+  ):
+    assert ((arm >= lo) & (arm <= hi)).all()
+    assert not solver.collides(arm, pos, quat)
+    rotation = solver.data.xmat[solver.wrist].reshape(3, 3)
+    np.testing.assert_allclose(rotation[:, 0], [0, 0, -1], atol=1e-3)
+
+
+def test_reset_places_sampled_pregrasp_and_tracks_start(env):
+  local = env.scene["object"].data.root_link_pos_w - env.scene.env_origins
+  torch.testing.assert_close(local, events.object_start(env))
+  torch.testing.assert_close(
+    rewards.horizontal_displacement(env), torch.zeros(2, device=env.device)
+  )
+  assert (signals.normal_force(env, "hand_object") == 0).all()
+
+
+def test_scripted_approach_is_collision_free():
+  cfg = teacher_env_cfg()
+  cfg.scene.num_envs = 1
+  model = Scene(cfg.scene, device="cpu").compile()
+  script = ScriptedGrasp.solve(model)
+  data = mujoco.MjData(model)
+  mujoco.mj_resetDataKeyframe(model, data, 0)
+  joint_pos = cfg.scene.entities["robot"].init_state.joint_pos
+  assert joint_pos is not None
+  joint_ids = np.array([model.joint(f"robot/{name}").id for name in joint_pos])
+  qpos_ids = model.jnt_qposadr[joint_ids]
+  palm = model.body("robot/right_hand").id
+  for t in np.linspace(0.0, APPROACH_END, 61):
+    q = script.target(float(t))
+    assert (q >= model.jnt_range[joint_ids, 0]).all()
+    assert (q <= model.jnt_range[joint_ids, 1]).all()
+    data.qpos[qpos_ids] = q
+    mujoco.mj_forward(model, data)
+    rotation = data.xmat[palm].reshape(3, 3)
+    np.testing.assert_allclose(rotation[:, 0], [0, 0, -1], atol=1e-3)
+    assert (data.contact.dist >= -1e-5).all()
+  rotation = data.xmat[palm].reshape(3, 3)
+  local = rotation.T @ (np.array(OBJECT_POS) - data.xpos[palm])
+  np.testing.assert_allclose(local, HAND_CENTER, atol=1e-3)
+
+  # Another IK branch reaches the same palm pose but has unnamed arm collision
+  # geoms interpenetrating. The audit must classify them by body ownership.
+  data.qpos[qpos_ids[:6]] = (
+    -1.7897409333,
+    -0.9473604500,
+    2.7322809275,
+    1.3566721760,
+    -1.3518517203,
+    1.5707963268,
+  )
+  mujoco.mj_forward(model, data)
+  audit = RolloutAudit()
+  audit.update(
+    model, data.contact.geom, data.contact.dist, np.array(OBJECT_POS), True, 0.0
+  )
+  assert audit.undesired_penetration_m > 0.005
+  assert not audit.passed
+
+
+def test_scripted_native_lift_with_clean_approach():
   result = run_native_probe()
   assert result.success, result
   assert result.initial_penetration_m < 1e-5
   assert result.final_lift_m >= 0.10
   assert result.hold_seconds >= 3.0
+  assert result.rollout.passed
 
 
 @pytest.mark.slow
-def test_scripted_warp_lift_without_initial_penetration():
+def test_scripted_warp_lift_with_clean_approach():
   result = run_warp_probe(get_test_device())
   assert result.success, result
   assert result.initial_penetration_m < 1e-5
   assert result.final_lift_m >= 0.10
   assert result.hold_seconds >= 3.0
+  assert result.rollout.passed
 
 
 def test_rounded_pads_keep_body_inertias_and_fit_original_bounds():

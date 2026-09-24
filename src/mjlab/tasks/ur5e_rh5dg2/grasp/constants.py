@@ -1,4 +1,6 @@
-"""Fixed primitive and calibrated joint waypoints for the teacher baseline."""
+"""Primitive, pre-grasp sampling and hand presets for the teacher baseline."""
+
+import math
 
 from mjlab.asset_zoo.scenes.workstation import TABLE_TOP_Z
 
@@ -33,67 +35,71 @@ ARM_BODIES = (
   "wrist_2_link",
   "wrist_3_link",
 )
-PREGRASP_ARM = (
-  -1.5379673853,
-  -1.5623198752,
-  1.7366317066,
-  -1.7451081582,
+# Pre-grasp sampling after RobustDexGrasp (cfg_reg.yaml, train.py), mirrored so
+# the workspace lies in +Y of the arm base. Hand-local +X is the palm normal and
+# +Z the finger axis of the right_hand (wrist) frame.
+OBJECT_ANGLE = (0.3 * math.pi, 0.7 * math.pi)
+OBJECT_DISTANCE = (0.45, 0.75)
+OBJECT_MAX_ABS_X = 0.25
+CAMERA_POS = (-0.035, 0.58, 1.531)
+TOP_GRASP = True
+STANDOFF = 0.25
+NUM_ROLLS = 10
+GRASP_WIDTH_LIMIT = 0.18
+LENGTH_SCORE_COEFF = 5.0
+ANGLE_SCORE_COEFF = 1.0
+PREGRASP_CLEARANCE = 0.005
+POOL_SIZE = 1024
+# Object center inside the open hand at pre-close, in the right_hand frame.
+HAND_CENTER = (0.125, 0.005, 0.190)
+# Collision-free palm-down IK branch, used to seed every pre-grasp solve.
+ARM_IK_SEED = (
+  -1.7897409333,
+  -1.9260224786,
+  2.5735678028,
+  -0.6475453242,
+  1.3518517203,
   -1.5707963268,
-  0.0328289415,
 )
-GRASP_ARM = (
-  -1.5379673853,
-  -1.4268370118,
-  2.0031156539,
-  -2.1470749689,
-  -1.5707963268,
-  0.0328289415,
-)
-LIFT_ARM = (
-  -1.5379673853,
-  -1.5758645552,
-  1.5452335959,
-  -1.5401653675,
-  -1.5707963268,
-  0.0328289415,
-)
+# Nearly extended fingers with a loose thumb, inside the 0.9 soft joint limits
+# that the action clamps to.
 OPEN_HAND = (
   1.2,
-  0.4,
-  0.4,
-  0.4,
+  0.08,
+  0.06,
+  0.06,
   0.0,
-  0.4,
-  0.4,
-  0.4,
+  0.1,
+  0.1,
+  0.1,
   0.0,
-  0.4,
-  0.4,
-  0.4,
-  0.4,
-  0.4,
-  0.4,
-  0.4,
-  0.4,
-  0.4,
+  0.1,
+  0.1,
+  0.1,
+  0.1,
+  0.1,
+  0.1,
+  0.1,
+  0.1,
+  0.1,
 )
 CLOSED_HAND = (
   1.2,
   0.4,
-  0.7,
-  0.7,
+  0.5,
+  0.5,
   0.0,
-  0.9,
-  0.9,
-  0.9,
+  0.5,
+  0.5,
+  0.5,
   0.0,
-  0.9,
-  0.9,
-  0.9,
-  0.9,
-  0.9,
-  0.9,
-  0.9,
-  0.9,
-  0.9,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
+  0.5,
 )
