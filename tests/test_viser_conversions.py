@@ -1,9 +1,9 @@
 """Test viser conversion functions with various robot models."""
 
-from pathlib import Path
-
 import mujoco
 
+from mjlab.asset_zoo.robots.rh5dg2_hand.rh5dg2_hand_constants import RH5DG2_HAND_XML
+from mjlab.asset_zoo.robots.universal_robots_ur5e.ur5e_constants import UR5E_XML
 from mjlab.viewer.viser import (
   create_site_mesh,
   get_geom_texture_id,
@@ -16,12 +16,9 @@ from mjlab.viewer.viser import (
 
 def load_robot_model(robot_name: str) -> mujoco.MjModel:
   """Load a robot model from the asset zoo."""
-  base_path = Path(__file__).parent.parent / "src/mjlab/asset_zoo/robots"
-
-  # Map robot names to their XML files.
   robot_paths = {
-    "unitree_g1": base_path / "unitree_g1/xmls/g1.xml",
-    "unitree_go1": base_path / "unitree_go1/xmls/go1.xml",
+    "ur5e": UR5E_XML,
+    "rh5dg2_hand": RH5DG2_HAND_XML,
   }
 
   if robot_name not in robot_paths:
@@ -34,9 +31,9 @@ def load_robot_model(robot_name: str) -> mujoco.MjModel:
   return mujoco.MjModel.from_xml_path(str(xml_path))
 
 
-def test_unitree_g1_conversion():
-  """Test conversion with Unitree G1 robot."""
-  model = load_robot_model("unitree_g1")
+def test_ur5e_conversion():
+  """Test conversion with the UR5e arm."""
+  model = load_robot_model("ur5e")
 
   mesh_geom_count = 0
   has_textures = False
@@ -57,15 +54,15 @@ def test_unitree_g1_conversion():
       if hasattr(mesh.visual, "uv"):
         has_textures = True
 
-  assert mesh_geom_count > 0, "No mesh geometries found in Unitree G1"
-  print(f"✓ Unitree G1: Successfully converted {mesh_geom_count} mesh geometries")
+  assert mesh_geom_count > 0, "No mesh geometries found in UR5e"
+  print(f"✓ UR5e: Successfully converted {mesh_geom_count} mesh geometries")
   if has_textures:
     print("  - Found textured meshes")
 
 
-def test_unitree_go1_conversion():
-  """Test conversion with Unitree Go1 robot."""
-  model = load_robot_model("unitree_go1")
+def test_rh5dg2_hand_conversion():
+  """Test conversion with the rh5dg2 hand."""
+  model = load_robot_model("rh5dg2_hand")
 
   mesh_geom_count = 0
   primitive_geom_count = 0
@@ -87,7 +84,7 @@ def test_unitree_go1_conversion():
       # Count primitive geometries (box, sphere, capsule, etc.).
       primitive_geom_count += 1
 
-  print(f"✓ Unitree Go1: Successfully converted {mesh_geom_count} mesh geometries")
+  print(f"✓ rh5dg2 hand: Successfully converted {mesh_geom_count} mesh geometries")
   print(f"  - Also has {primitive_geom_count} primitive geometries")
 
 
@@ -188,7 +185,7 @@ def test_performance():
   """Test conversion performance with a complex model."""
   import time
 
-  model = load_robot_model("unitree_g1")
+  model = load_robot_model("rh5dg2_hand")
 
   mesh_geoms = []
   for geom_idx in range(model.ngeom):
@@ -535,8 +532,8 @@ if __name__ == "__main__":
   print("=" * 60)
 
   tests = [
-    test_unitree_g1_conversion,
-    test_unitree_go1_conversion,
+    test_ur5e_conversion,
+    test_rh5dg2_hand_conversion,
     test_texture_extraction,
     test_material_colors,
     test_performance,

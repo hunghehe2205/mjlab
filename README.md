@@ -18,41 +18,33 @@ with minimal dependencies and direct access to native MuJoCo data structures.
 
 mjlab requires an NVIDIA GPU for training. macOS is supported for evaluation only.
 
-**Try it now:**
-
-Run the demo (no installation needed):
-
-```bash
-uvx --from mjlab --refresh demo
-```
-
-Or try in [Google Colab](https://colab.research.google.com/github/mujocolab/mjlab/blob/main/notebooks/demo.ipynb) (no local setup required).
-
 **Install from source:**
 
 ```bash
-git clone https://github.com/mujocolab/mjlab.git && cd mjlab
-uv run demo
+git clone https://github.com/hunghehe2205/mjlab.git && cd mjlab
+uv run list-envs
 ```
 
 For alternative installation methods (PyPI, Docker), see the [Installation Guide](https://mujocolab.github.io/mjlab/main/source/installation.html).
 
 ## Training Examples
 
-### 1. Velocity Tracking
+This fork keeps the UR5e + rh5dg2 dexterous grasping tasks only.
 
-Train a Unitree G1 humanoid to follow velocity commands on flat terrain:
+### 1. Grasp-and-Lift Teacher
+
+Train the UR5e + rh5dg2 hand to grasp a box, lift it 10 cm and hold it steady:
 
 ```bash
-uv run train Mjlab-Velocity-Flat-Unitree-G1 --env.scene.num-envs 4096
+uv run train Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --env.scene.num-envs 256
 ```
 
 **Multi-GPU Training:** Scale to multiple GPUs using `--gpu-ids`:
 
 ```bash
-uv run train Mjlab-Velocity-Flat-Unitree-G1 \
+uv run train Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 \
   --gpu-ids "[0, 1]" \
-  --env.scene.num-envs 4096
+  --env.scene.num-envs 256
 ```
 
 See the [Distributed Training guide](https://mujocolab.github.io/mjlab/main/source/training/distributed_training.html) for details.
@@ -60,16 +52,15 @@ See the [Distributed Training guide](https://mujocolab.github.io/mjlab/main/sour
 Evaluate a policy while training (fetches latest checkpoint from Weights & Biases):
 
 ```bash
-uv run play Mjlab-Velocity-Flat-Unitree-G1 --wandb-run-path your-org/mjlab/run-id
+uv run play Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --wandb-run-path your-org/mjlab/run-id
 ```
 
-### 2. Motion Imitation
+### 2. Scripted Physics Probe
 
-Train a humanoid to mimic reference motions. See the [motion imitation guide](https://mujocolab.github.io/mjlab/main/source/training/motion_imitation.html) for preprocessing setup.
+Verify that the scene can physically achieve the grasp before training:
 
 ```bash
-uv run train Mjlab-Tracking-Flat-Unitree-G1 --registry-name your-org/motions/motion-name --env.scene.num-envs 4096
-uv run play Mjlab-Tracking-Flat-Unitree-G1 --wandb-run-path your-org/mjlab/run-id
+uv run python -m mjlab.tasks.ur5e_rh5dg2.grasp.physics_probe --backend warp --device cuda:0
 ```
 
 ### 3. Sanity-check with Dummy Agents

@@ -25,11 +25,7 @@ from mjviser.conversions import (
 )
 from mujoco import mjtGeom
 
-from mjlab.asset_zoo.robots import (
-  get_g1_robot_cfg,
-  get_go1_robot_cfg,
-  get_yam_robot_cfg,
-)
+from mjlab.asset_zoo.robots import get_ur5e_rh5dg2_robot_cfg
 from mjlab.terrains.config import ALL_TERRAINS_CFG
 from mjlab.terrains.terrain_generator import (
   TerrainGenerator,
@@ -39,9 +35,7 @@ from mjlab.terrains.terrain_generator import (
 # Supported robots for visualization.
 ROBOT_CFG_GETTERS = {
   "None": None,
-  "Unitree Go1": get_go1_robot_cfg,
-  "Unitree G1": get_g1_robot_cfg,
-  "Yam": get_yam_robot_cfg,
+  "UR5e + rh5dg2": get_ur5e_rh5dg2_robot_cfg,
 }
 
 # Parameter range hints for sliders.
