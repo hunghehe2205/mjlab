@@ -35,8 +35,9 @@ This fork keeps the UR5e + rh5dg2 dexterous grasping tasks only.
 
 Train the UR5e + rh5dg2 hand to grasp a box, following the RobustDexGrasp teacher:
 episodes are grasp-only (4 s) with rewards for weighted finger contact and
-horizontal grip force, and penalties for moving the object, fast wrist/arm motion,
-table and self contacts. Each reset follows the RobustDexGrasp pre-grasp pipeline:
+horizontal grip force, and penalties for hand-object distance, moving the object,
+fast wrist/arm motion, table and self contacts. Actions accumulate joint targets
+slowly (0.2 rad/s arm, 0.6 rad/s hand per unit action) with a 0.2 std floor. Each reset follows the RobustDexGrasp pre-grasp pipeline:
 a random box placement and yaw, a palm-down hand starting just above the box
 (6 cm standoff), the best of 10 wrist rolls by IK and grasp width, and collision
 filtering. A pool of 1024 pre-grasps is solved once at startup.

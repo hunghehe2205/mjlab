@@ -89,26 +89,42 @@ def test_translated_env_observations_and_steps(env):
   assert not env.termination_manager.terminated.any()
 
 
-def test_action_target_held_clipped_and_partial_reset(env):
+def test_action_target_accumulates_held_delayed_and_partial_reset(env):
   action = env.action_manager.get_term("joint_pos")
   assert isinstance(action, GraspAction)
   robot = env.scene["robot"]
   q = robot.data.joint_pos[:, action.target_ids].clone()
-  action.process_actions(torch.full_like(q, 10.0))
+  torch.testing.assert_close(action.target, q)
   limits = robot.data.joint_pos_limits[:, action.target_ids]
-  expected = torch.clamp(q + action.scale, min=limits[..., 0], max=limits[..., 1])
-  torch.testing.assert_close(action.target, expected)
+  expected = q
+  for _ in range(2):
+    action.process_actions(torch.full_like(q, 10.0))
+    expected = torch.clamp(
+      expected + action.scale, min=limits[..., 0], max=limits[..., 1]
+    )
+    torch.testing.assert_close(action.target, expected)
+  previous = torch.clamp(q + action.scale, min=limits[..., 0], max=limits[..., 1])
   robot.write_joint_state_to_sim(q - 0.01, torch.zeros_like(q))
-  for _ in range(3):
+  action._delay = torch.tensor([True, False], device=env.device)
+  action.apply_actions()
+  torch.testing.assert_close(robot.data.joint_pos_target[0], previous[0])
+  torch.testing.assert_close(robot.data.joint_pos_target[1], expected[1])
+  for _ in range(2):
     action.apply_actions()
     torch.testing.assert_close(robot.data.joint_pos_target, expected)
+  action.process_actions(torch.zeros_like(q))
+  torch.testing.assert_close(action.target, expected)
+  for _ in range(20):
+    action.process_actions(torch.ones_like(q))
+  torch.testing.assert_close(action.target[:, :6], q[:, :6] - 0.01 + 0.10)
   ids = torch.tensor([0], device=env.device)
   other_q = robot.data.joint_pos[1].clone()
+  other_target = action.target[1].clone()
   env.reset(env_ids=ids)
   torch.testing.assert_close(
     action.target[0], robot.data.joint_pos[0, action.target_ids]
   )
-  torch.testing.assert_close(action.target[1], expected[1])
+  torch.testing.assert_close(action.target[1], other_target)
   torch.testing.assert_close(robot.data.joint_pos[1], other_q)
   assert (action.raw_action[0] == 0).all()
 
@@ -138,9 +154,9 @@ def test_reward_signs_weights_and_lift_check(env):
   assert (cost[:-1] >= cost[1:]).all()
   assert cost[-1] == 0
   for name, cfg in env.cfg.rewards.items():
-    assert (cfg.weight > 0) == (name in ("reach", "contact", "grip")), name
-  weights = rewards.contact_weights()
-  assert weights[0] == 0 and math.isclose(sum(weights), 1.0)
+    assert (cfg.weight > 0) == (name in ("contact", "grip")), name
+  for weights in (rewards.contact_weights(), rewards.distance_weights()):
+    assert weights[0] == 0 and math.isclose(sum(weights), 1.0)
   assert "lift_height" not in env.cfg.metrics
   obj = env.scene["object"]
   pose = obj.data.root_link_pose_w.clone()
@@ -189,16 +205,17 @@ def test_lift_test_ramps_arm_after_grasp_phase():
     assert isinstance(scale, torch.Tensor)
     for _ in range(grasp_steps - 1):
       env.step(close)
-    q = env.scene["robot"].data.joint_pos[:, action.target_ids].clone()
+    q = env.scene["robot"].data.joint_pos[:, action.target_ids[6:]].clone()
+    previous = action.target[:, 6:].clone()
     env.step(close)
     torch.testing.assert_close(
       action.target[:, 6:],
       torch.clamp(
-        q[:, 6:] + scale[:, 6:],
+        torch.minimum(previous + scale[:, 6:], q + 0.5),
         max=env.scene["robot"].data.joint_pos_limits[:, action.target_ids[6:], 1],
       ),
     )
-    start = env.scene["robot"].data.joint_pos[:, action.target_ids[:6]].clone()
+    start = action.target[:, :6].clone()
     delta = events.lift_delta(env)
     env.step(close)
     torch.testing.assert_close(action.target[:, :6], start + delta / ramp_steps)

@@ -16,8 +16,14 @@ LIFT_HEIGHT = 0.10
 HOLD_TIME = 3.0
 FORCE_THRESHOLD = 0.1
 GRIP_FORCE = 5.0
-ARM_ACTION_SCALE = 0.10
-HAND_ACTION_SCALE = 0.50
+# Targets accumulate per 0.05 s step (reference: 0.005/0.015 rad per 0.2 s step,
+# raised so the 6 cm approach fits a 4 s episode). The target may lead the joint by
+# at most the offsets, which bound the grasp preload.
+ARM_ACTION_SCALE = 0.01
+HAND_ACTION_SCALE = 0.03
+ARM_MAX_OFFSET = 0.10
+HAND_MAX_OFFSET = 0.50
+MIN_ACTION_STD = 0.2
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 FINGER_ROOTS = (
   "R_thumb_yaw",
@@ -33,7 +39,6 @@ HAND_BODIES = ("R_hand_palm",) + tuple(
     ("yaw", "mcp", "pip", "dip") if finger in FINGERS[:3] else ("mcp", "pip", "dip")
   )
 )
-TIP_BODIES = tuple(f"R_{finger}_force_sensor" for finger in FINGERS)
 ARM_BODIES = (
   "shoulder_link",
   "upper_arm_link",

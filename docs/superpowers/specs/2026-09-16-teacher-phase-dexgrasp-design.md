@@ -72,11 +72,18 @@ actions. A scripted close/lift probe remains the physics acceptance check.
 Use one task-local action term with 24 normalized actions, clipped to [-1, 1].
 At each policy step, compute once:
 
-    target = clamp(q_current + action * scale, hard_joint_limits)
+    target = clamp(previous_target + action * scale, q - max_offset, q + max_offset)
+    target = clamp(target, hard_joint_limits)
 
-Arm scale 0.10 rad, hand scale 0.50 rad per policy step. Hold this target through
-all physics substeps; do not recompute relative to current q every substep.
-The target is in radians and stored explicitly. Reset raw action to zero and
+Arm scale 0.01 rad, hand scale 0.03 rad per policy step (0.2 and 0.6 rad/s per
+unit action). The reference moves 0.005/0.015 rad per 0.2 s step (0.025/0.075
+rad/s) around the measured q; ours is faster so the 6 cm approach fits 4 s, and
+keeps its 1:3 arm/hand ratio. The target accumulates, so a zero action holds the
+pose instead of sagging under gravity, and the hand can build preload; max_offset
+(arm 0.10 rad, hand 0.50 rad, the previous per-step scales) bounds the lead over q
+and therefore the squeeze. Hold this target through all physics substeps, except
+that in half of the steps (random per env) the first substep still uses the
+previous target, as the reference's actuation delay. Reset raw action to zero and
 target to the reset joint pose, including partial environment resets.
 
 Lift test (`lift_test=True`, default in play): from GRASP_TIME on, the arm target
@@ -136,8 +143,8 @@ nonnegative cost and has a negative weight.
 | --- | ---: | --- |
 | Weighted fraction of hand links touching the object | 1.5 | affordance_contact (1.5) |
 | Weighted horizontal contact force, capped 5 N per link (thumb 10 N) | 1.0 | affordance_impulse, x-y impulse clipped (1.0) |
-| Fingertip-to-surface reach, exp(-d/0.05) | 0.5 | affordance_reward (0.5, listed in the config, not recorded in the reference code) |
-| Hand link below the tabletop: terminate | -10 once | terminal reward -10 |
+| Weighted hand-link distance to the box surface, x17 links | -0.5 | affordance_reward (-0.5 x weighted joint distance x16, computed in `train.py`) |
+| Hand link below the tabletop: terminate | -1 once | terminal reward -10, overwritten in `train.py` |
 | Hand anchor clearance below 2 cm | -0.1 | table_reward, arm_height (-0.03, -0.05) |
 | Robot-table, hand-arm and arm-object contacts | -0.2 | table/arm contact and impulse |
 | Object displacement norm from its start | -5 | obj_displacement (-5) |
@@ -148,8 +155,15 @@ nonnegative cost and has a negative weight.
 | Arm joint speed squared, x4 beyond 0.5 rad/s | -1 | arm_joint_vel (-1) |
 
 Contact weights mirror the reference: palm 0, fingertips x3, thumb links x2, thumb
-tip x2 more, normalized to sum 1. The reference's push penalty has coefficient 0
-and is omitted.
+tip x2 more, normalized to sum 1. Distance weights: palm 0, fingertips x4, thumb
+tip x2 more. The reference's push penalty has coefficient 0 and is omitted.
+
+The reference adds the -10 terminal reward in `VectorizedEnvironment`, but
+`train.py` then overwrites the reward with the recorded sum, so it never reaches
+PPO. A full -10 here would also be about 17 times heavier relative to the dense
+return (4 s x 1.5 contact = 6, against 70 x 1.5 = 105 there). The penalty is -1:
+small, but it keeps early termination from being attractive while the dense
+return is still negative.
 
 ## Episode, success and diagnostics
 
@@ -174,8 +188,10 @@ contact.
 PPO: actor/critic MLP 128x128, gamma 0.996, lambda 0.95, learning rate 3e-4,
 4 epochs x 4 mini-batches, clip 0.2, value coefficient 0.5, max grad norm 0.5,
 adaptive KL 0.01, entropy 0.0, observation normalization, rollout 64 steps.
-The hand target scale must allow preload against contact: a 0.10 rad
-limit failed the initial physical probe; the final baseline uses 0.50 rad.
+Action std starts at 1.0 and is floored at 0.2, as the reference's
+`enforce_minimum_std`. The hand must be able to preload against contact: a 0.10
+rad lead failed the initial physical probe, so the hand target may lead q by up to
+0.50 rad.
 
 Start with 256 envs on CUDA; play/probe use 1. CPU tests do not establish CUDA
 throughput or learning convergence. No training-success claim without a run.

@@ -30,18 +30,32 @@ From `allegro_teacher/Environment.hpp`, `cfg_reg.yaml`, `train.py` and
 `quantitative_eval.py`:
 
 - Training runs 70 steps at 5 Hz per episode, no lift, no success term. The only
-  termination is a hand joint below the table (reward -10).
-- Recorded rewards: affordance contact (1.5), x-y contact impulse clipped per
-  link (1.0), table contact/impulse, arm contact/impulse, object displacement
-  (-5), object speed (-15), object angular speed (-0.2), wrist linear/angular
-  speed (-1/-0.1), arm joint speed (-1). The config's distance reward (0.5) is not
-  recorded; the push penalty is 0.
+  termination is a hand joint below the table. Its -10 terminal reward is added in
+  `VectorizedEnvironment` but overwritten by `train.py`, so PPO never sees it.
+- Rewards from `Environment.hpp`: affordance contact (1.5), x-y contact impulse
+  clipped per link (1.0), table contact/impulse, arm contact/impulse, object
+  displacement (-5), object speed (-15), object angular speed (-0.2), wrist
+  linear/angular speed (-1/-0.1), arm joint speed (-1); the push penalty is 0.
+  `train.py` adds the weighted joint-to-object distance (-0.5), table and arm height
+  log barriers and arm collision (-1). (An earlier version of this note wrongly
+  said the distance term was unused.) Its `reward_r.clip(min=-2)` is not assigned
+  and has no effect.
+- Actions: target = measured q + a x (0.005 rad arm, 0.015 rad hand) per 0.2 s,
+  Gaussian actions with std starting at 1.0 and floored at 0.2, and a random
+  one-substep actuation delay.
 - Evaluation appends 100 steps: `switch_root_guidance` interpolates the arm joints
   over 80 steps toward a raised pose while the policy keeps driving the fingers.
   Success is `obj z - z0 > 0.1`.
 
 ## Adaptation
 
+- Action speed: the first grasp-only version kept 0.10/0.50 rad per 0.05 s
+  (2/10 rad/s per unit action, 80-130 times the reference) with no std floor, so
+  early exploration slammed the hand into the box that starts 2 cm away. Now
+  targets accumulate at 0.01/0.03 rad per step (0.2/0.6 rad/s), lead q by at most
+  0.10/0.50 rad, std is floored at 0.2, and the actuation delay is reproduced.
+- Terminal penalty -1 instead of -10 (see the spec); distance penalty -0.5 replaces
+  the positive exponential reach reward.
 - Grasp episode 4 s (80 steps at 20 Hz). The reward table is in the spec.
 - Lift test: at 4 s the arm ramps over 3 s by a per-placement joint offset that
   raises the pre-grasp wrist 0.20 m (IK solved with the pool), then holds for
@@ -52,8 +66,11 @@ From `allegro_teacher/Environment.hpp`, `cfg_reg.yaml`, `train.py` and
 
 ## Checks
 
-With zero actions, the lift test raised the palm 0.18 m over the ramp (the
-held-target arm sags about 7 cm during the 4 s grasp phase, which the policy
-compensates). `evaluate.py` ran end to end on a 3-iteration CPU checkpoint
-(success 0, as expected). The scripted probe still lifts 0.143 m (Warp CPU) and
-holds 3 s. No policy result for the grasp-only reward exists yet.
+With the first (q-relative) action term and zero actions, the arm sagged about
+7 cm during the 4 s grasp phase and the lift test raised the palm only 0.18 m.
+With accumulated targets the palm settles 4 mm and the lift test raises it
+0.20 m. With the new action limits the scripted
+probe (approach 3 s, close 2 s, lift over 3 s, 14 s rollout) still lifts 0.140 m
+(native) and 0.143 m (Warp CPU) and holds 3 s. `evaluate.py` ran end to end on a
+3-iteration CPU checkpoint (success 0, as expected). No policy result for the
+grasp-only reward exists yet.

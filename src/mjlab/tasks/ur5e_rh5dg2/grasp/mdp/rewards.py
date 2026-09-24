@@ -24,27 +24,39 @@ if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
 
 
-def contact_weights() -> tuple[float, ...]:
-  """Reference finger weights: no palm, fingertips x3, thumb x2, thumb tip x2."""
+def link_weights(tip: float, thumb: float, thumb_tip: float) -> tuple[float, ...]:
+  """Per hand body weights summing to 1; the palm gets none."""
   weights = []
   for name in HAND_BODIES:
     w = 0.0 if name == "R_hand_palm" else 1.0
-    w *= 3.0 if name.endswith("_dip") else 1.0
-    w *= 2.0 if name.startswith("R_thumb") else 1.0
-    w *= 2.0 if name == "R_thumb_dip" else 1.0
+    w *= tip if name.endswith("_dip") else 1.0
+    w *= thumb if name.startswith("R_thumb") else 1.0
+    w *= thumb_tip if name == "R_thumb_dip" else 1.0
     weights.append(w)
   return tuple(w / sum(weights) for w in weights)
+
+
+def contact_weights() -> tuple[float, ...]:
+  """Reference contact weights: fingertips x3, thumb x2, thumb tip x2 more."""
+  return link_weights(3.0, 2.0, 2.0)
+
+
+def distance_weights() -> tuple[float, ...]:
+  """Reference distance weights: fingertips x4, thumb tip x2 more."""
+  return link_weights(4.0, 1.0, 2.0)
 
 
 def _weighted(score: torch.Tensor) -> torch.Tensor:
   return score @ score.new_tensor(contact_weights())
 
 
-def reach(env: ManagerBasedRlEnv, tips: SceneEntityCfg) -> torch.Tensor:
+def distance(env: ManagerBasedRlEnv, anchors: SceneEntityCfg) -> torch.Tensor:
+  """Weighted hand-link distance to the box, scaled by the finger link count."""
   obj = env.scene["object"].data
-  points = env.scene["robot"].data.body_link_pos_w[:, tips.body_ids]
+  points = env.scene["robot"].data.body_link_pos_w[:, anchors.body_ids]
   vectors = box_surface_vectors(points, obj.root_link_pos_w, obj.root_link_quat_w)
-  return torch.exp(-vectors.norm(dim=-1).mean(dim=-1) / 0.05)
+  weights = points.new_tensor(distance_weights())
+  return vectors.norm(dim=-1) @ weights * (len(HAND_BODIES) - 1)
 
 
 def contact(env: ManagerBasedRlEnv) -> torch.Tensor:

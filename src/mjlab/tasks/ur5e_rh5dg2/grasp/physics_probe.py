@@ -21,18 +21,20 @@ from mjlab.envs import ManagerBasedRlEnv
 from mjlab.scene import Scene
 from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   ARM_ACTION_SCALE,
+  ARM_MAX_OFFSET,
   CLOSED_HAND,
   FINGERS,
   FORCE_THRESHOLD,
   HAND_ACTION_SCALE,
   HAND_CENTER,
+  HAND_MAX_OFFSET,
   HOLD_TIME,
   LIFT_HEIGHT,
   OBJECT_POS,
   OPEN_HAND,
   STANDOFF,
 )
-from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.actions import GraspAction
+from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.actions import GraspAction, GraspActionCfg
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.events import PregraspReset
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import (
   lift_height,
@@ -140,7 +142,8 @@ class RolloutAudit:
       )
 
 
-APPROACH_END, CLOSE_END, LIFT_START, LIFT_END = 3.0, 5.0, 6.0, 8.0
+APPROACH_END, CLOSE_END, LIFT_START, LIFT_END = 3.0, 5.0, 6.0, 9.0
+PROBE_TIME = 14.0
 LIFT_CLEARANCE = 0.06
 
 
@@ -229,12 +232,17 @@ def run_native_probe() -> ProbeResult:
   force = np.zeros(6)
   rise = speed = peak_force = 0.0
   audit = RolloutAudit()
-  for step in range(round(12.0 / step_dt)):
+  scale = np.array([ARM_ACTION_SCALE] * 6 + [HAND_ACTION_SCALE] * 18)
+  max_offset = np.array([ARM_MAX_OFFSET] * 6 + [HAND_MAX_OFFSET] * 18)
+  target = initial_q.copy()
+  for step in range(round(PROBE_TIME / step_dt)):
     goal = script.target(step * step_dt)
-    scale = np.array([ARM_ACTION_SCALE] * 6 + [HAND_ACTION_SCALE] * 18)
     q = data.qpos[qpos_ids]
-    target = q + np.clip(goal - q, -scale, scale)
-    data.ctrl[ctrl_ids] = np.clip(target, limits[:, 0], limits[:, 1])
+    target = np.clip(
+      target + np.clip(goal - target, -scale, scale), q - max_offset, q + max_offset
+    )
+    target = np.clip(target, limits[:, 0], limits[:, 1])
+    data.ctrl[ctrl_ids] = target
     mujoco.mj_step(model, data, nstep=cfg.decimation)
     mujoco.mj_forward(model, data)
     touching: set[str] = set()
@@ -291,7 +299,10 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
   cfg = teacher_env_cfg()
   cfg.scene.num_envs = 1
   cfg.auto_reset = False
-  cfg.episode_length_s = 12.0
+  cfg.episode_length_s = PROBE_TIME
+  action_cfg = cfg.actions["joint_pos"]
+  assert isinstance(action_cfg, GraspActionCfg)
+  action_cfg.random_delay = False
   env = ManagerBasedRlEnv(cfg, device=device)
   try:
     env.reset()
@@ -311,12 +322,13 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
       as_row(script.approach[0]),
     )
     env.sim.forward()
+    action = env.action_manager.get_term("joint_pos")
+    assert isinstance(action, GraspAction)
+    action.reset()
     ncon = int(wp.to_torch(env.sim.wp_data.nacon)[0].item())
     initial = penetration(
       wp.to_torch(env.sim.wp_data.contact.dist)[:ncon].cpu().numpy()
     )
-    action = env.action_manager.get_term("joint_pos")
-    assert isinstance(action, GraspAction)
     audit = RolloutAudit()
     required = math.ceil(HOLD_TIME / env.step_dt)
     count = 0
@@ -324,8 +336,7 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
       goal = torch.tensor(
         script.target(step * env.step_dt), device=device, dtype=torch.float32
       )[None, :]
-      q = env.scene["robot"].data.joint_pos[:, action.target_ids]
-      _, _, terminated, truncated, _ = env.step((goal - q) / action.scale)
+      _, _, terminated, truncated, _ = env.step((goal - action.target) / action.scale)
       ncon = int(wp.to_torch(env.sim.wp_data.nacon)[0].item())
       audit.update(
         env.sim.mj_model,

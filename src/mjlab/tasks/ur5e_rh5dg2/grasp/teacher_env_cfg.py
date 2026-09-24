@@ -26,17 +26,19 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   ARM_ACTION_SCALE,
   ARM_BODIES,
   ARM_IK_SEED,
+  ARM_MAX_OFFSET,
   BOX_SIZE,
   FINGER_ROOTS,
   GRASP_TIME,
   HAND_ACTION_SCALE,
   HAND_BODIES,
+  HAND_MAX_OFFSET,
   LIFT_RAMP,
   LIFT_TIME,
+  MIN_ACTION_STD,
   OBJECT_POS,
   OPEN_HAND,
   POOL_SIZE,
-  TIP_BODIES,
 )
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp import (
   observations,
@@ -69,7 +71,6 @@ def teacher_env_cfg(
   )
   obj = get_box_cfg(BOX_SIZE, mass=0.08)
   obj.init_state.pos = OBJECT_POS
-  tips = SceneEntityCfg("robot", body_names=TIP_BODIES, preserve_order=True)
   palm = SceneEntityCfg("robot", body_names=("R_hand_palm",))
   anchors = SceneEntityCfg(
     "robot",
@@ -178,16 +179,23 @@ def teacher_env_cfg(
           **{name: ARM_ACTION_SCALE for name in (*SIZE3_JOINTS, *SIZE1_JOINTS)},
           "R_.*_joint": HAND_ACTION_SCALE,
         },
+        max_offset={
+          **{name: ARM_MAX_OFFSET for name in (*SIZE3_JOINTS, *SIZE1_JOINTS)},
+          "R_.*_joint": HAND_MAX_OFFSET,
+        },
+        random_delay=True,
         grasp_time=GRASP_TIME if lift_test else None,
         lift_ramp=LIFT_RAMP,
       )
     },
     events=events,
     rewards={
-      "reach": RewardTermCfg(func=rewards.reach, weight=0.5, params={"tips": tips}),
       "contact": RewardTermCfg(func=rewards.contact, weight=1.5),
       "grip": RewardTermCfg(func=rewards.grip, weight=1.0),
-      "crash": RewardTermCfg(func=rewards.crash, weight=-10.0),
+      "distance": RewardTermCfg(
+        func=rewards.distance, weight=-0.5, params={"anchors": anchors}
+      ),
+      "crash": RewardTermCfg(func=rewards.crash, weight=-1.0),
       "clearance": RewardTermCfg(
         func=rewards.height_cost, weight=-0.1, params={"links": links}
       ),
@@ -258,6 +266,8 @@ def teacher_ppo_cfg() -> RslRlOnPolicyRunnerCfg:
   cfg = ur5e_rh5dg2_ppo_runner_cfg()
   cfg.actor.hidden_dims = (128, 128)
   cfg.critic.hidden_dims = (128, 128)
+  assert cfg.actor.distribution_cfg is not None
+  cfg.actor.distribution_cfg["std_range"] = (MIN_ACTION_STD, 1e6)
   cfg.algorithm.gamma = 0.996
   cfg.algorithm.entropy_coef = 0.0
   cfg.algorithm.learning_rate = 3e-4
