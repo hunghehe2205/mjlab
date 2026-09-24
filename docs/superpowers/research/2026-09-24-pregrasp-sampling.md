@@ -17,7 +17,7 @@ IK, collision check) and `grasp/mdp/events.py` (`PregraspReset`).
 | Random yaw, height from the lowest point | Yaw uniform in [-π, π]; box rests on the table. |
 | Ray-traced visible points from a virtual camera | Box surface points on faces facing the camera at (-0.035, 0.58, 1.531) m (exact for a convex primitive). |
 | Approach from the camera or from the top | Top approach, palm down (`TOP_GRASP`). |
-| Hand center 0.25 m from the affordance center | `HAND_CENTER` (box center at pre-close, wrist frame) placed 0.25 m along the approach. |
+| Hand center 0.25 m from the affordance center | `HAND_CENTER` (box center at pre-close, wrist frame) placed 0.06 m along the approach (see Standoff). |
 | 10 roll candidates, projection width | 10 finger-axis directions over the half plane facing away from the robot. |
 | UR5 IK per candidate, drop infeasible | Damped least squares on the native model, seeded from the collision-free palm-down branch, within the 0.9 soft limits. |
 | Score 5 x width + wrist_2 terms, argmin | Same formula; widths >= 0.18 m excluded unless all are. |
@@ -28,6 +28,23 @@ IK, collision check) and `grasp/mdp/events.py` (`PregraspReset`).
 The reference's sign flip leaves only five distinct roll directions out of ten
 thetas; here the ten directions are distinct. The object-displacement penalty is
 measured from each env's stored start position rather than a fixed pose.
+
+## Standoff
+
+The reference's 0.25 m left the lowest hand point 21 cm above the box top and the
+starting `reach` reward at 0.005 (5 cm length scale), so early training would be
+spent learning to reach. The standoff is 0.06 m, to focus the policy on grasping:
+
+| Standoff | Lowest hand point above box top | Fingertip-surface mean | Start `reach` |
+| ---: | ---: | ---: | ---: |
+| 0.25 m | 20.9 cm | 26.7 cm | 0.005 |
+| 0.15 m | 10.9 cm | 16.9 cm | 0.034 |
+| 0.10 m | 5.9 cm | 12.1 cm | 0.088 |
+| **0.06 m** | **1.9 cm (min 1.6)** | **8.6 cm** | **0.180** |
+| 0.05 m | 0.9 cm (min 0.6) | 7.8 cm | 0.212 |
+
+The lowest point is the thumb tip, which hangs below the palm; 0.05 m leaves less
+than the 5 mm collision margin at some placements.
 
 ## Pre-shape
 
@@ -61,24 +78,24 @@ Scripted grasp from pool entry #0 (approach 0–3 s, close 3–5 s, lift 6–8 s
 ## Physics measurements
 
 The probe starts from the sampled pre-grasp of the nominal placement, approaches
-along a straight line (IK every centimetre), closes and lifts 0.16 m vertically.
+6 cm along a straight line (IK every centimetre), closes and lifts 0.16 m vertically.
 Raw reports: [native](assets/2026-09-24-pregrasp-native.json) and
 [Warp CPU](assets/2026-09-24-pregrasp-warp.json).
 
 | Metric | Native CPU | Warp CPU |
 | --- | ---: | ---: |
-| Final lift | 0.1385 m | 0.1407 m |
+| Final lift | 0.1397 m | 0.1426 m |
 | Continuous stable hold | 3.0 s | 3.0 s |
-| Final object linear speed | 0.00063 m/s | 0.00068 m/s |
-| Peak hand/object contact depth | 1.33 mm | 1.33 mm |
-| Peak object/table contact depth | 1.81 mm | 2.92 mm |
+| Final object linear speed | 0.00061 m/s | 0.0034 m/s |
+| Peak hand/object contact depth | 1.21 mm | 1.10 mm |
+| Peak object/table contact depth | 1.82 mm | 2.91 mm |
 | Peak other robot contact depth | 0 | 0 |
 | Approach hand/object contact depth | 0 | 0 |
 | Maximum approach horizontal displacement | <0.000001 mm | <0.00002 mm |
 
 The same scripted grasp succeeded on 12 of 12 random edge-biased placements
-(yaw -124° to +177°, distance 0.45–0.73 m), with both the 1.2 and 0.8 thumb yaw
-pre-shapes, and zero approach displacement.
+(yaw -124° to +177°, distance 0.45–0.73 m), at both 0.25 m and 0.06 m standoff,
+with zero approach displacement.
 
 A 16-env, 3-iteration CPU training run completed with resets from the pool;
 object displacement penalty and lift-height metric stayed at zero at the start of

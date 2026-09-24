@@ -35,7 +35,7 @@ This fork keeps the UR5e + rh5dg2 dexterous grasping tasks only.
 
 Train the UR5e + rh5dg2 hand to grasp a box, lift it 10 cm and hold it steady.
 Each reset follows the RobustDexGrasp pre-grasp pipeline: a random box placement
-and yaw, a palm-down approach 25 cm from the visible surface, the best of 10 wrist
+and yaw, a palm-down hand starting just above the box (6 cm standoff), the best of 10 wrist
 rolls by IK and grasp width, and collision filtering. A pool of 1024 pre-grasps
 is solved once at startup.
 

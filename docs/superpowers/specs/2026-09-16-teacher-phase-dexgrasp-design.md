@@ -30,8 +30,9 @@ it must not override policy actions during training.
     toward the object and +Z = finger axis; 10 finger-axis rolls over the half
     plane facing away from the robot.
   - The grasp reference `HAND_CENTER` = (0.125, 0.005, 0.190) m in the wrist
-    frame (box center at pre-close) is placed 0.25 m from the affordance center
-    along the approach.
+    frame (box center at pre-close) is placed 0.06 m from the affordance center
+    along the approach (the reference uses 0.25 m). The thumb tip then starts
+    about 2 cm above the box top, so training focuses on grasping, not reaching.
   - Damped least-squares IK per roll, seeded from a collision-free palm-down
     branch and rejected outside the 0.9 soft limits. Score = 5 x grasp width +
     |wrist_2 - π/2| + 0.5(|wrist_2| - 3.2) among widths below 0.18 m.

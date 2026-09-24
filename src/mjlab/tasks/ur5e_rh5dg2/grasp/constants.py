@@ -43,7 +43,8 @@ OBJECT_DISTANCE = (0.45, 0.75)
 OBJECT_MAX_ABS_X = 0.25
 CAMERA_POS = (-0.035, 0.58, 1.531)
 TOP_GRASP = True
-STANDOFF = 0.25
+# The paper starts 0.25 m away; starting 2 cm above the box focuses on grasping.
+STANDOFF = 0.06
 NUM_ROLLS = 10
 GRASP_WIDTH_LIMIT = 0.18
 LENGTH_SCORE_COEFF = 5.0

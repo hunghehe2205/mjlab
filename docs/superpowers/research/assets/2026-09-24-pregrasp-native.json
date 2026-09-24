@@ -3,16 +3,16 @@
   "device": "cpu",
   "success": true,
   "initial_penetration_m": 5.551115123125783e-17,
-  "final_lift_m": 0.1384695529668587,
+  "final_lift_m": 0.1397265404511101,
   "hold_seconds": 3.0,
-  "object_speed_m_s": 0.0006334785928689934,
-  "contact_force_n": 1.8076639625354503,
+  "object_speed_m_s": 0.0006106837659442031,
+  "contact_force_n": 1.8300367796142745,
   "rollout": {
-    "hand_object_penetration_m": 0.0013308250786742107,
-    "object_table_penetration_m": 0.0018055653912732463,
+    "hand_object_penetration_m": 0.0012078182045499775,
+    "object_table_penetration_m": 0.001824898370543991,
     "undesired_penetration_m": 0.0,
-    "approach_object_displacement_m": 1.4129727200731292e-10,
+    "approach_object_displacement_m": 1.593032103292818e-10,
     "approach_hand_object_penetration_m": 0.0,
-    "peak_hand_force_n": 3.8564521536019503
+    "peak_hand_force_n": 3.402503160643131
   }
 }
