@@ -31,11 +31,22 @@ measured from each env's stored start position rather than a fixed pose.
 
 ## Pre-shape
 
-The thumb keeps yaw 1.2 rad for opposition and is opened to mcp/pip/dip
-0.08/0.06/0.06 rad, raising the thumb-box gap at pre-close from 2.6 cm to 4.1 cm.
-Yaw 1.35 rad collides with the box and yaw 0.9 rad loses opposition.
+The thumb flexion joints sit near their lower soft limits (mcp/pip/dip
+0.08/0.06/0.06 rad), so further opening comes from yaw. Yaw swings the thumb from
+opposition toward the palm plane. Measured at pre-close:
 
-![Thumb opening at pre-close](assets/2026-09-24-thumb-opening.png)
+| Thumb yaw | Angle to palm plane | Thumb-box gap | Probe |
+| ---: | ---: | ---: | --- |
+| 1.2 | 58° | 4.1 cm | pass |
+| 1.0 | 54° | 4.6 cm | pass |
+| **0.8 (chosen)** | **47°** | **5.6 cm** | pass |
+| 0.6 | 38° | 6.2 cm | pass |
+| 0.4 | 29° | 6.9 cm | pass |
+
+The probe's closed pose keeps yaw 1.2, so closing swings the thumb back into
+opposition. Below 0.8 the thumb drifts beside the box rather than in front of it.
+
+![Thumb yaw at pre-close, side and front views](assets/2026-09-24-thumb-opening.png)
 
 ## Sampled poses
 
@@ -56,18 +67,18 @@ Raw reports: [native](assets/2026-09-24-pregrasp-native.json) and
 
 | Metric | Native CPU | Warp CPU |
 | --- | ---: | ---: |
-| Final lift | 0.1384 m | 0.1384 m |
+| Final lift | 0.1385 m | 0.1407 m |
 | Continuous stable hold | 3.0 s | 3.0 s |
-| Final object linear speed | 0.00067 m/s | 0.00077 m/s |
-| Peak hand/object contact depth | 1.32 mm | 1.33 mm |
-| Peak object/table contact depth | 1.80 mm | 2.71 mm |
+| Final object linear speed | 0.00063 m/s | 0.00068 m/s |
+| Peak hand/object contact depth | 1.33 mm | 1.33 mm |
+| Peak object/table contact depth | 1.81 mm | 2.92 mm |
 | Peak other robot contact depth | 0 | 0 |
 | Approach hand/object contact depth | 0 | 0 |
 | Maximum approach horizontal displacement | <0.000001 mm | <0.00002 mm |
 
 The same scripted grasp succeeded on 12 of 12 random edge-biased placements
-(yaw -124° to +177°, distance 0.45–0.73 m): lift 0.127–0.141 m, 3.9 s stable,
-zero approach displacement.
+(yaw -124° to +177°, distance 0.45–0.73 m), with both the 1.2 and 0.8 thumb yaw
+pre-shapes, and zero approach displacement.
 
 A 16-env, 3-iteration CPU training run completed with resets from the pool;
 object displacement penalty and lift-height metric stayed at zero at the start of

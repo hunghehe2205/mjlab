@@ -61,10 +61,10 @@ ARM_IK_SEED = (
   1.3518517203,
   -1.5707963268,
 )
-# Nearly extended fingers with a loose thumb, inside the 0.9 soft joint limits
-# that the action clamps to.
+# Nearly extended fingers and a thumb swung 47 deg from the palm plane, inside the
+# 0.9 soft joint limits that the action clamps to.
 OPEN_HAND = (
-  1.2,
+  0.8,
   0.08,
   0.06,
   0.06,

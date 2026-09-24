@@ -38,9 +38,10 @@ it must not override policy actions during training.
   - Reject any robot-world contact within 5 mm and any robot self-penetration
     (the arm mount on the pedestal is excluded).
   - 1024 placements are solved once at startup; each reset draws one uniformly.
-- Fixed 18-joint pre-shape: thumb yaw 1.2 rad with mcp/pip/dip 0.08/0.06/0.06 rad
-  (opened for a 4.1 cm thumb-box gap at pre-close), index/middle yaw 0, other
-  flexion 0.1 rad. All values lie inside the 0.9 soft limits.
+- Fixed 18-joint pre-shape: thumb yaw 0.8 rad (47° from the palm plane, 5.6 cm
+  thumb-box gap at pre-close) with mcp/pip/dip 0.08/0.06/0.06 rad, index/middle
+  yaw 0, other flexion 0.1 rad. All values lie inside the 0.9 soft limits. The
+  probe closes the thumb back to yaw 1.2 rad.
 - MVP object: box, half extents (0.03, 0.03, 0.06) m, mass 0.08 kg,
   friction 1.0, condim 4. The nominal placement (-0.10, 0.48,
   TABLE_TOP_Z + 0.06) with identity orientation is used by the probe.
