@@ -31,13 +31,15 @@ For alternative installation methods (PyPI, Docker), see the [Installation Guide
 
 This fork keeps the UR5e + rh5dg2 dexterous grasping tasks only.
 
-### 1. Grasp-and-Lift Teacher
+### 1. Grasp Teacher
 
-Train the UR5e + rh5dg2 hand to grasp a box, lift it 10 cm and hold it steady.
-Each reset follows the RobustDexGrasp pre-grasp pipeline: a random box placement
-and yaw, a palm-down hand starting just above the box (6 cm standoff), the best of 10 wrist
-rolls by IK and grasp width, and collision filtering. A pool of 1024 pre-grasps
-is solved once at startup.
+Train the UR5e + rh5dg2 hand to grasp a box, following the RobustDexGrasp teacher:
+episodes are grasp-only (4 s) with rewards for weighted finger contact and
+horizontal grip force, and penalties for moving the object, fast wrist/arm motion,
+table and self contacts. Each reset follows the RobustDexGrasp pre-grasp pipeline:
+a random box placement and yaw, a palm-down hand starting just above the box
+(6 cm standoff), the best of 10 wrist rolls by IK and grasp width, and collision
+filtering. A pool of 1024 pre-grasps is solved once at startup.
 
 ```bash
 uv run train Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --env.scene.num-envs 256
@@ -53,10 +55,18 @@ uv run train Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 \
 
 See the [Distributed Training guide](https://mujocolab.github.io/mjlab/main/source/training/distributed_training.html) for details.
 
-Evaluate a policy while training (fetches latest checkpoint from Weights & Biases):
+Grasp quality is measured by the paper's lift test: after the grasp phase the arm
+is raised 20 cm by script while the policy keeps the fingers; success is a rise
+above 10 cm, over uniformly sampled placements:
 
 ```bash
-uv run play Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --wandb-run-path your-org/mjlab/run-id
+uv run python -m mjlab.tasks.ur5e_rh5dg2.grasp.evaluate --wandb-run your-org/project/run-id
+```
+
+`play` shows the same grasp, then the scripted raise at 4 s:
+
+```bash
+uv run play Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --wandb-run-path your-org/project/run-id
 ```
 
 ### 2. Scripted Physics Probe

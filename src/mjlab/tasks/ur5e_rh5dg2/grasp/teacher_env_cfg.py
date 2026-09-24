@@ -1,4 +1,4 @@
-"""Privileged, fully policy-controlled grasp-and-lift baseline."""
+"""Privileged grasp-only teacher after RobustDexGrasp, with its lift test."""
 
 from copy import deepcopy
 
@@ -28,10 +28,11 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   ARM_IK_SEED,
   BOX_SIZE,
   FINGER_ROOTS,
+  GRASP_TIME,
   HAND_ACTION_SCALE,
   HAND_BODIES,
-  HOLD_TIME,
-  LIFT_HEIGHT,
+  LIFT_RAMP,
+  LIFT_TIME,
   OBJECT_POS,
   OPEN_HAND,
   POOL_SIZE,
@@ -52,10 +53,10 @@ from mjlab.viewer import ViewerConfig
 
 
 def teacher_env_cfg(
-  play: bool = False, lift_height: float = LIFT_HEIGHT, hold_time: float = HOLD_TIME
+  play: bool = False, lift_test: bool | None = None
 ) -> ManagerBasedRlEnvCfg:
-  if lift_height <= 0 or hold_time <= 0:
-    raise ValueError("Lift height and hold time must be positive.")
+  """Grasp-only episodes; the lift test (default in play) appends a scripted raise."""
+  lift_test = play if lift_test is None else lift_test
   robot = deepcopy(get_ur5e_rh5dg2_robot_cfg())
   robot.spec_fn = teacher_robot_spec
   joint_names = (
@@ -81,13 +82,24 @@ def teacher_env_cfg(
   links = SceneEntityCfg(
     "robot", body_names=tuple(name for name in HAND_BODIES if not name.endswith("_dip"))
   )
+  hand = SceneEntityCfg("robot", body_names=HAND_BODIES)
+  arm = SceneEntityCfg("robot", joint_names=(*SIZE3_JOINTS, *SIZE1_JOINTS))
   object_match = ContactMatch(mode="body", pattern="object", entity="object")
+  hand_match = ContactMatch(mode="body", pattern=HAND_BODIES, entity="robot")
   sensors = (
     ContactSensorCfg(
       name="hand_object",
-      primary=ContactMatch(mode="body", pattern=HAND_BODIES, entity="robot"),
+      primary=hand_match,
       secondary=object_match,
       secondary_policy="error",
+    ),
+    ContactSensorCfg(
+      name="hand_object_world",
+      primary=hand_match,
+      secondary=object_match,
+      secondary_policy="error",
+      fields=("found", "force", "normal", "tangent"),
+      global_frame=True,
     ),
     ContactSensorCfg(
       name="finger_object",
@@ -134,7 +146,7 @@ def teacher_env_cfg(
   events["reset_pregrasp"] = EventTermCfg(
     func=PregraspReset,
     mode="reset",
-    params={"pool_size": POOL_SIZE, "edge_biased": not play},
+    params={"pool_size": POOL_SIZE, "edge_biased": not (play or lift_test)},
   )
   obs = {
     "state": ObservationTermCfg(
@@ -166,48 +178,61 @@ def teacher_env_cfg(
           **{name: ARM_ACTION_SCALE for name in (*SIZE3_JOINTS, *SIZE1_JOINTS)},
           "R_.*_joint": HAND_ACTION_SCALE,
         },
+        grasp_time=GRASP_TIME if lift_test else None,
+        lift_ramp=LIFT_RAMP,
       )
     },
     events=events,
     rewards={
-      "reach": RewardTermCfg(func=rewards.reach, weight=1.0, params={"tips": tips}),
-      "contact": RewardTermCfg(func=rewards.contact, weight=0.5),
-      "lift": RewardTermCfg(
-        func=rewards.lift, weight=6.0, params={"height": lift_height}
-      ),
-      "hold": RewardTermCfg(
-        func=rewards.hold, weight=2.0, params={"height": lift_height}
-      ),
-      "success": RewardTermCfg(func=rewards.completion, weight=150.0),
+      "reach": RewardTermCfg(func=rewards.reach, weight=0.5, params={"tips": tips}),
+      "contact": RewardTermCfg(func=rewards.contact, weight=1.5),
+      "grip": RewardTermCfg(func=rewards.grip, weight=1.0),
+      "crash": RewardTermCfg(func=rewards.crash, weight=-10.0),
       "clearance": RewardTermCfg(
         func=rewards.height_cost, weight=-0.1, params={"links": links}
       ),
       "undesired_contact": RewardTermCfg(func=rewards.undesired_contact, weight=-0.2),
-      "object_displacement_xy": RewardTermCfg(
-        func=rewards.horizontal_displacement, weight=-5.0
+      "object_displacement": RewardTermCfg(
+        func=rewards.object_displacement, weight=-5.0
       ),
-      "object_velocity_xy": RewardTermCfg(
-        func=rewards.horizontal_velocity, weight=-1.0
+      "object_velocity": RewardTermCfg(func=rewards.object_velocity, weight=-15.0),
+      "object_angular_velocity": RewardTermCfg(
+        func=rewards.object_angular_velocity, weight=-0.2
       ),
-      "joint_velocity": RewardTermCfg(func=rewards.joint_velocity, weight=-0.01),
-      "palm_velocity": RewardTermCfg(
-        func=rewards.palm_velocity, weight=-0.01, params={"palm": palm}
+      "wrist_velocity": RewardTermCfg(
+        func=rewards.wrist_velocity, weight=-1.0, params={"palm": palm}
+      ),
+      "wrist_angular_velocity": RewardTermCfg(
+        func=rewards.wrist_angular_velocity, weight=-0.1, params={"palm": palm}
+      ),
+      "arm_joint_velocity": RewardTermCfg(
+        func=rewards.arm_joint_velocity, weight=-1.0, params={"arm": arm}
       ),
     },
     terminations={
-      "success": TerminationTermCfg(
-        func=terminations.LiftSuccess,
-        params={"height": lift_height, "hold_time": hold_time},
+      "hand_below_table": TerminationTermCfg(
+        func=terminations.hand_below_table, params={"links": hand}
       ),
       "dropped": TerminationTermCfg(func=terminations.dropped),
       "time_out": TerminationTermCfg(func=time_out, time_out=True),
     },
     metrics={
-      "lift_height": MetricsTermCfg(func=signals.lift_height),
+      "fingers_in_contact": MetricsTermCfg(
+        func=signals.fingers_in_contact, reduce="last"
+      ),
+      "object_displacement": MetricsTermCfg(
+        func=rewards.object_displacement, reduce="last"
+      ),
       "object_speed": MetricsTermCfg(func=signals.object_speed),
-      "contact_force": MetricsTermCfg(func=rewards.peak_contact_force),
-      "hold_progress": MetricsTermCfg(func=terminations.hold_progress, reduce="last"),
-      "success": MetricsTermCfg(func=terminations.success, reduce="last"),
+      "contact_force": MetricsTermCfg(func=rewards.peak_contact_force, reduce="max"),
+      **(
+        {
+          "lift_height": MetricsTermCfg(func=signals.lift_height, reduce="last"),
+          "success": MetricsTermCfg(func=terminations.lifted, reduce="last"),
+        }
+        if lift_test
+        else {}
+      ),
     },
     sim=SimulationCfg(
       mujoco=MujocoCfg(
@@ -217,7 +242,7 @@ def teacher_env_cfg(
       njmax=1024,
     ),
     decimation=10,
-    episode_length_s=1e9 if play else 12.0,
+    episode_length_s=1e9 if play else GRASP_TIME + (LIFT_TIME if lift_test else 0.0),
     viewer=ViewerConfig(
       origin_type=ViewerConfig.OriginType.ASSET_BODY,
       entity_name="object",

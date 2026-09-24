@@ -1,20 +1,20 @@
-# Teacher grasp-and-lift — UR5e + rh5dg2 / mjlab
+# Grasp-only teacher — UR5e + rh5dg2 / mjlab
 
-Updated: 2026-09-24. Supersedes the grasp-only/scripted-lift draft.
+Updated: 2026-09-24. Reframed as grasp-only after RobustDexGrasp; supersedes the
+grasp-and-lift reward with a 3 s hold success.
 
 ## Scope and acceptance
 
-Teacher controls all 24 arm/hand joints from a sampled pre-grasp, grasps one
-primitive, lifts it by 0.10 m and holds it for 3 continuous seconds. Success
-terminates the episode. The object placement and the matching pre-grasp are
-randomized per reset (RobustDexGrasp reset pipeline). Transport, lowering,
-release, student, physics domain randomization and real deployment are outside
-this implementation.
+Teacher controls all 24 arm/hand joints from a sampled pre-grasp and learns to
+grasp one primitive, as the RobustDexGrasp teacher does: no lift or hold reward,
+fixed-length grasp episodes. Grasp quality is measured by the paper's lift test:
+after the grasp phase the arm is raised by script while the policy keeps the
+fingers, and success is a rise above 0.10 m at the end. The object placement and
+the matching pre-grasp are randomized per reset. Transport, release, student,
+physics domain randomization and real deployment are outside this implementation.
 
-This is an adaptation of RobustDexGrasp: its original teacher trains grasp-only
-and uses a separately commanded lift for evaluation. Our lift is part of the
-policy's objective. A scripted close/lift is only a physics acceptance probe;
-it must not override policy actions during training.
+The lift test runs in evaluation and play only; training never overrides policy
+actions. A scripted close/lift probe remains the physics acceptance check.
 
 ## Scene and physics baseline
 
@@ -55,7 +55,7 @@ it must not override policy actions during training.
   grasps. This is an explicit collision approximation, not real-hand calibration.
 - implicitfast, elliptic cone, impratio 10; physics timestep 0.005 s.
 - Policy interval 0.05 s (20 Hz), decimation 10. This deliberately differs from
-  the paper's 5 Hz to allow finer approach/lift corrections. Episode 12 seconds.
+  the paper's 5 Hz to allow finer approach/lift corrections. Grasp episode 4 s.
 - All object motion must result from gravity, contact and robot actuation:
   no object weld, teleport, gravity cancellation or attachment during rollout.
 - Probe must start without penetration and demonstrate >=0.10 m lift, >=3 s hold
@@ -79,11 +79,17 @@ all physics substeps; do not recompute relative to current q every substep.
 The target is in radians and stored explicitly. Reset raw action to zero and
 target to the reset joint pose, including partial environment resets.
 
+Lift test (`lift_test=True`, default in play): from GRASP_TIME on, the arm target
+ramps linearly over 3 s from the arm pose at that instant by a per-placement joint
+offset, and the policy's arm actions are ignored; hand targets still follow the
+policy. The offset is the IK difference between the pre-grasp and the same wrist
+pose raised 0.20 m, solved with the pool. This mirrors the reference's
+`switch_root_guidance`, which interpolates the arm joints toward a raised pose over
+80 steps while the policy controls the fingers.
+
 Reset robot and props with env origins; the pre-grasp event writes the sampled
 object pose and the arm/hand joints with zero velocities and stores each env's
-object start position. Reset success counters and action target for exactly the
-selected envs. z0 is the resting box center on the table, not a noisy contact
-transient. Horizontal displacement is measured from the stored start position.
+object start position and lift offset.
 
 ## Privileged observations and frames
 
@@ -103,57 +109,65 @@ sim.mj_data or loop over CPU mj_contactForce/mj_geomDistance in the training loo
 - q, qdot: joint state; object pose and velocities relative to the env frame.
 - desired contact: per finger link/palm binary contact and bounded normal force.
 - undesired contact: robot-table, robot-self and arm-object, separately filtered.
-- hold progress: consecutive successful control steps / required hold steps.
 
 World axes are shared by the translated envs. Distances are translation-invariant;
 absolute positions subtract env_origins. No observation noise for this teacher;
 actor enable_corruption remains True for the repository convention, without
 noise terms. Critic uses the same privileged information.
 
-Observation size: 259 = 57 distance + 19 height + 7 palm pose + 24 tracking
+Observation size: 258 = 57 distance + 19 height + 7 palm pose + 24 tracking
 error + 24 q + 24 qdot + 7 object pose + 6 object velocity + 45 contact bits +
-45 bounded force features + 1 hold progress.
+45 bounded force features. The policy is not told when the lift test starts, as
+in the reference.
 
 Contact sensors use maxforce reduction per body (representative strongest normal
-contact, not a sum of every contact). Desired contacts are instantaneous for
-success; undesired penalties can use substep force history to catch brief hits.
-Use a force threshold to distinguish actual load from mere proximity.
+contact, not a sum of every contact). A second hand-object sensor reports the same
+contact force in the world frame for the horizontal grip reward. Undesired
+penalties use substep force history to catch brief hits. A force threshold
+distinguishes actual load from mere proximity.
 
 ## Rewards
 
-Every penalty function returns a nonnegative cost and has a negative manager
-weight. Every incentive returns a nonnegative score and has a positive weight.
-Use scale_rewards_by_dt=True. Weights are task baselines, not paper reproductions.
+Reward terms follow `allegro_teacher/Environment.hpp` and `cfg_reg.yaml`; weights
+are per second with scale_rewards_by_dt=True. Every penalty function returns a
+nonnegative cost and has a negative weight.
 
-- Reach: bounded exponential of mean fingertip-to-surface distance.
-- Contact: mean contact score with bounded force contribution; total reward kept
-  smaller than the lift/hold incentive. Never reward unlimited squeezing.
-- Lift: clip((z-z0)/0.10, 0, 1), gated by hand support.
-- Hold: height reached, low linear/angular speed, multiple hand contacts,
-  no table support. Bonus for success larger than remaining positive dense return
-  so early completion is preferable to delaying termination.
-- Height cost: squared shortfall below 2 cm for selected hand anchors, excluding
-  fingertips. No log of zero/negative values. No penalty on fixed arm base height.
-- Undesired contact: positive contact/force cost with negative weight.
-- Horizontal object displacement/velocity and arm/hand motion regularization.
-  No penalty on intentional vertical object displacement relative to reset.
+| Term | Weight | Reference term (coeff) |
+| --- | ---: | --- |
+| Weighted fraction of hand links touching the object | 1.5 | affordance_contact (1.5) |
+| Weighted horizontal contact force, capped 5 N per link (thumb 10 N) | 1.0 | affordance_impulse, x-y impulse clipped (1.0) |
+| Fingertip-to-surface reach, exp(-d/0.05) | 0.5 | affordance_reward (0.5, listed in the config, not recorded in the reference code) |
+| Hand link below the tabletop: terminate | -10 once | terminal reward -10 |
+| Hand anchor clearance below 2 cm | -0.1 | table_reward, arm_height (-0.03, -0.05) |
+| Robot-table, hand-arm and arm-object contacts | -0.2 | table/arm contact and impulse |
+| Object displacement norm from its start | -5 | obj_displacement (-5) |
+| Object linear speed squared | -15 | obj_vel (-15) |
+| Object angular speed squared | -0.2 | obj_qvel (-0.2) |
+| Palm linear speed squared, x10 above 0.25 m/s | -1 | wrist_vel (-1) |
+| Palm angular speed squared | -0.1 | wrist_qvel (-0.1) |
+| Arm joint speed squared, x4 beyond 0.5 rad/s | -1 | arm_joint_vel (-1) |
 
-Approach/grasp/lift rewards coexist; no hard grasp gate disables arm motion.
-Counters advance exactly once per control step, not when observations/logging
-are queried. Invalid hold resets the counter. Partial reset cannot affect others.
+Contact weights mirror the reference: palm 0, fingertips x3, thumb links x2, thumb
+tip x2 more, normalized to sum 1. The reference's push penalty has coefficient 0
+and is omitted.
 
-## Success and diagnostics
+## Episode, success and diagnostics
 
-Success requires rise >=0.10 m, linear speed <=0.05 m/s, angular speed <=1 rad/s,
-contact on at least two distinct fingers, and no object-table support for 3 s.
-A dropped object below the tabletop or outside the table footprint fails;
-12 s is a timeout. A thrown object or touching the height threshold once is not
-success. Success and failure are true terminations, time limit is truncation.
+Training episodes last GRASP_TIME = 4 s (80 policy steps, close to the
+reference's 70 steps at 5 Hz). Terminations: any hand link below the tabletop,
+object dropped off the table (not in the reference) and the time limit.
 
-Log each weighted reward (RewardManager), lift height, object speed, contact force,
-hold progress and success rate (MetricsManager). Tests cover finite observations,
-translation invariance, target holding/clipping/reset, penalty signs, continuous
-hold/no-contact rejection, partial resets and actual sensor response to contact.
+The lift test episode is GRASP_TIME + 4 s. Success: object rise > 0.10 m at the
+end, with no earlier termination (the reference checks `obj z - z0 > 0.1` after
+its lift phase). `grasp/evaluate.py` runs it over uniformly sampled placements and
+reports the success rate, mean rise, fingers in contact and object displacement at
+the end of the grasp phase.
+
+Training logs every weighted reward, fingers in contact and object displacement at
+the end of the episode, object speed and peak contact force. Tests cover finite
+observations, translation invariance, target holding/clipping/reset, reward signs
+and weights, the lift-test arm ramp, partial resets and actual sensor response to
+contact.
 
 ## Training baseline
 
@@ -182,11 +196,13 @@ throughput or learning convergence. No training-success claim without a run.
   (CPU default; append `--device cuda:0` on a CUDA machine).
 - Native reference: append `--backend native`.
 - Train: `uv run train Mjlab-Grasp-Teacher-Ur5e-Rh5dg2`
+- Lift test: `uv run python -m mjlab.tasks.ur5e_rh5dg2.grasp.evaluate --wandb-run <run>`
 - View: `uv run play Mjlab-Grasp-Teacher-Ur5e-Rh5dg2 --agent zero`
 - Tests: `uv run pytest tests/test_grasp_teacher.py`
 
-Play uses the repository's unlimited-time convention; success/failure still end
-an episode. Training and physics acceptance have the 12-second timeout.
+Play runs the lift test with the repository's unlimited-time convention: the arm
+raises at 4 s and then keeps holding. The physics probe keeps its own
+12-second rollout and 3 s hold check.
 
 Measured results and remaining limits are recorded in
 [the validation report](../research/2026-09-20-teacher-physics-validation.md).

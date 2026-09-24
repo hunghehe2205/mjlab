@@ -1,4 +1,4 @@
-"""Teacher action semantics, reset isolation, contacts and success conditions."""
+"""Teacher action semantics, reset isolation, contacts, rewards and lift test."""
 
 import math
 
@@ -12,8 +12,10 @@ from mjlab.asset_zoo.robots.ur5e_rh5dg2.ur5e_rh5dg2_constants import get_spec
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.scene import Scene
 from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
+  GRASP_TIME,
   HAND_CENTER,
-  LIFT_HEIGHT,
+  LIFT_OFFSET,
+  LIFT_RAMP,
   OBJECT_ANGLE,
   OBJECT_DISTANCE,
   OBJECT_MAX_ABS_X,
@@ -35,7 +37,7 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.teacher_env_cfg import teacher_env_cfg
 
 @pytest.fixture(scope="module")
 def teacher():
-  cfg = teacher_env_cfg(hold_time=0.15)
+  cfg = teacher_env_cfg()
   cfg.scene.num_envs = 2
   env = ManagerBasedRlEnv(cfg, device=get_test_device())
   yield env
@@ -59,6 +61,7 @@ def place_same(env):
     term.object_pos[:1].expand(n, -1),
     term.object_quat[:1].expand(n, -1),
     term.arm_pos[:1].expand(n, -1),
+    term.lift_pos[:1].expand(n, -1),
   )
   env.sim.forward()
   env.sim.sense()
@@ -71,7 +74,7 @@ def test_translated_env_observations_and_steps(env):
   place_same(env)
   obs = env.get_observations()
   assert env.action_manager.total_action_dim == 24
-  assert obs["actor"].shape == (2, 259)
+  assert obs["actor"].shape == (2, 258)
   torch.testing.assert_close(obs["actor"][0], obs["actor"][1], atol=1e-5, rtol=1e-5)
   torch.testing.assert_close(obs["actor"], obs["critic"])
   for name in ("robot", "object", "props"):
@@ -83,7 +86,7 @@ def test_translated_env_observations_and_steps(env):
     assert torch.isfinite(reward).all()
   assert (signals.normal_force(env, "object_table") > 0.1).all()
   assert not signals.finger_contacts(env).any()
-  assert not env.termination_manager.get_term("success").any()
+  assert not env.termination_manager.terminated.any()
 
 
 def test_action_target_held_clipped_and_partial_reset(env):
@@ -128,22 +131,17 @@ def test_box_surface_vectors_inside_outside_and_translation():
   )
 
 
-def test_reward_signs_and_vertical_motion(env):
+def test_reward_signs_weights_and_lift_check(env):
   heights = torch.tensor([-0.02, 0.0, 0.01, 0.02, 0.1])
   cost = rewards.clearance_cost(heights)
   assert torch.isfinite(cost).all()
   assert (cost[:-1] >= cost[1:]).all()
   assert cost[-1] == 0
-  for name in (
-    "clearance",
-    "undesired_contact",
-    "object_displacement_xy",
-    "object_velocity_xy",
-    "joint_velocity",
-    "palm_velocity",
-  ):
-    cfg = env.cfg.rewards[name]
-    assert cfg.weight < 0
+  for name, cfg in env.cfg.rewards.items():
+    assert (cfg.weight > 0) == (name in ("reach", "contact", "grip")), name
+  weights = rewards.contact_weights()
+  assert weights[0] == 0 and math.isclose(sum(weights), 1.0)
+  assert "lift_height" not in env.cfg.metrics
   obj = env.scene["object"]
   pose = obj.data.root_link_pose_w.clone()
   pose[:, 2] += 0.5
@@ -153,13 +151,10 @@ def test_reward_signs_and_vertical_motion(env):
   env.sim.sense()
   env.scene.update(0.0)
   torch.testing.assert_close(
-    rewards.horizontal_displacement(env),
-    torch.zeros(2, device=env.device),
-    atol=1e-6,
-    rtol=0,
+    rewards.object_displacement(env), torch.full((2,), 0.5, device=env.device)
   )
-  assert not signals.stable_hold(env, LIFT_HEIGHT).any()
-  assert not rewards.lift(env, LIFT_HEIGHT).any()
+  assert terminations.lifted(env).all()
+  assert rewards.contact(env).eq(0).all() and rewards.grip(env).eq(0).all()
 
 
 def test_contact_sensor_reads_live_warp_state(env):
@@ -177,24 +172,42 @@ def test_contact_sensor_reads_live_warp_state(env):
   assert env.sim.mj_data.time == 0
 
 
-def test_hold_counter_continuity_idempotence_and_partial_reset(env, monkeypatch):
-  term = env.termination_manager.get_term_cfg("success").func
-  assert isinstance(term, terminations.LiftSuccess)
-  valid = torch.ones(2, dtype=torch.bool, device=env.device)
-  monkeypatch.setattr(terminations, "stable_hold", lambda *_: valid)
-  for _ in range(2):
-    env.episode_length_buf += 1
-    assert not term(env, LIFT_HEIGHT, 0.15).any()
-    before = term.count.clone()
-    env.get_observations()
-    term(env, LIFT_HEIGHT, 0.15)
-    torch.testing.assert_close(term.count, before)
-  valid[0] = False
-  env.episode_length_buf += 1
-  result = term(env, LIFT_HEIGHT, 0.15)
-  assert result.tolist() == [False, True]
-  env.reset(env_ids=torch.tensor([0], device=env.device))
-  assert term.count.tolist() == [0, 3]
+def test_lift_test_ramps_arm_after_grasp_phase():
+  cfg = teacher_env_cfg(lift_test=True)
+  cfg.scene.num_envs = 1
+  env = ManagerBasedRlEnv(cfg, device=get_test_device())
+  try:
+    env.reset()
+    action = env.action_manager.get_term("joint_pos")
+    assert isinstance(action, GraspAction)
+    grasp_steps = round(GRASP_TIME / env.step_dt)
+    ramp_steps = math.ceil(LIFT_RAMP / env.step_dt)
+    assert env.max_episode_length > grasp_steps + ramp_steps
+    close = torch.ones((1, 24), device=env.device)
+    close[:, :6] = 0.0
+    scale = action.scale
+    assert isinstance(scale, torch.Tensor)
+    for _ in range(grasp_steps - 1):
+      env.step(close)
+    q = env.scene["robot"].data.joint_pos[:, action.target_ids].clone()
+    env.step(close)
+    torch.testing.assert_close(
+      action.target[:, 6:],
+      torch.clamp(
+        q[:, 6:] + scale[:, 6:],
+        max=env.scene["robot"].data.joint_pos_limits[:, action.target_ids[6:], 1],
+      ),
+    )
+    start = env.scene["robot"].data.joint_pos[:, action.target_ids[:6]].clone()
+    delta = events.lift_delta(env)
+    env.step(close)
+    torch.testing.assert_close(action.target[:, :6], start + delta / ramp_steps)
+    for _ in range(ramp_steps):
+      env.step(close)
+    torch.testing.assert_close(action.target[:, :6], start + delta)
+    assert "success" in env.cfg.metrics
+  finally:
+    env.close()
 
 
 def test_partial_reset_restores_object_and_clears_contacts(env):
@@ -225,20 +238,35 @@ def test_pregrasp_pool_is_in_region_palm_down_and_collision_free():
   np.testing.assert_allclose(pool.object_pos[:, 2], OBJECT_POS[2])
   solver = PregraspSolver(model)
   lo, hi = solver.arm_limits.T
-  for pos, quat, arm in zip(
-    pool.object_pos, pool.object_quat, pool.arm_pos, strict=True
+  for pos, quat, arm, lift in zip(
+    pool.object_pos, pool.object_quat, pool.arm_pos, pool.lift_pos, strict=True
   ):
     assert ((arm >= lo) & (arm <= hi)).all()
     assert not solver.collides(arm, pos, quat)
-    rotation = solver.data.xmat[solver.wrist].reshape(3, 3)
+    rotation = solver.data.xmat[solver.wrist].reshape(3, 3).copy()
+    wrist = solver.data.xpos[solver.wrist].copy()
     np.testing.assert_allclose(rotation[:, 0], [0, 0, -1], atol=1e-3)
+    solver.set_state(lift, pos, quat)
+    mujoco.mj_kinematics(model, solver.data)
+    np.testing.assert_allclose(
+      solver.data.xpos[solver.wrist] - wrist, [0, 0, LIFT_OFFSET], atol=1e-3
+    )
+    np.testing.assert_allclose(
+      solver.data.xmat[solver.wrist].reshape(3, 3), rotation, atol=1e-3
+    )
 
 
 def test_reset_places_sampled_pregrasp_and_tracks_start(env):
   local = env.scene["object"].data.root_link_pos_w - env.scene.env_origins
   torch.testing.assert_close(local, events.object_start(env))
   torch.testing.assert_close(
-    rewards.horizontal_displacement(env), torch.zeros(2, device=env.device)
+    rewards.object_displacement(env), torch.zeros(2, device=env.device)
+  )
+  term = events.pregrasp_reset(env)
+  arm = env.scene["robot"].data.joint_pos[:, term.joint_ids[:6]]
+  torch.testing.assert_close(
+    events.lift_delta(env),
+    term.lift_pos[(term.arm_pos[None] - arm[:, None]).abs().sum(-1).argmin(-1)] - arm,
   )
   assert (signals.normal_force(env, "hand_object") == 0).all()
 

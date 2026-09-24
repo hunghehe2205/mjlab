@@ -22,6 +22,7 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   GRASP_WIDTH_LIMIT,
   HAND_CENTER,
   LENGTH_SCORE_COEFF,
+  LIFT_OFFSET,
   NUM_ROLLS,
   OBJECT_ANGLE,
   OBJECT_DISTANCE,
@@ -68,6 +69,7 @@ class Pregrasp(NamedTuple):
   arm: np.ndarray  # [6]
   rotation: np.ndarray  # [3, 3] wrist frame in the world
   center: np.ndarray  # [3] affordance center of the visible points
+  lift: np.ndarray  # [6] arm with the wrist raised by LIFT_OFFSET
 
 
 @dataclass
@@ -75,6 +77,7 @@ class PregraspPool:
   object_pos: np.ndarray  # [N, 3] env-local
   object_quat: np.ndarray  # [N, 4] wxyz
   arm_pos: np.ndarray  # [N, 6]
+  lift_pos: np.ndarray  # [N, 6]
 
 
 def sample_object_xy(rng: np.random.Generator, edge_biased: bool) -> np.ndarray:
@@ -233,6 +236,7 @@ class PregraspSolver:
     rotations, widths = candidate_frames(approach, points)
     best, best_score = None, np.inf
     seed = self.seed(pos)
+    up = np.array([0.0, 0.0, LIFT_OFFSET])
     for rot, width in zip(rotations, widths, strict=True):
       q = self.ik(self.wrist_pose(center, rot, STANDOFF), rot, seed)
       if q is None or self.collides(q, pos, quat):
@@ -247,8 +251,11 @@ class PregraspSolver:
         )
       else:
         continue
-      if score < best_score:
-        best, best_score = Pregrasp(q, rot, center), score
+      if score >= best_score:
+        continue
+      lift = self.ik(self.wrist_pose(center, rot, STANDOFF) + up, rot, q)
+      if lift is not None:
+        best, best_score = Pregrasp(q, rot, center, lift), score
     return best
 
 
@@ -260,7 +267,7 @@ def build_pool(
   solver = PregraspSolver(model)
   surface = box_surface_points(rng)
   z = OBJECT_POS[2]
-  pos, quat, arm = [], [], []
+  pos, quat, arm, lift = [], [], [], []
   for _ in range(20 * size):
     xy = sample_object_xy(rng, edge_biased and rng.random() < 0.5)
     p = np.array([xy[0], xy[1], z])
@@ -271,6 +278,7 @@ def build_pool(
     pos.append(p)
     quat.append(q)
     arm.append(solution.arm)
+    lift.append(solution.lift)
     if len(arm) == size:
-      return PregraspPool(np.array(pos), np.array(quat), np.array(arm))
+      return PregraspPool(*map(np.array, (pos, quat, arm, lift)))
   raise RuntimeError(f"Only {len(arm)} of {size} pre-grasps were feasible.")

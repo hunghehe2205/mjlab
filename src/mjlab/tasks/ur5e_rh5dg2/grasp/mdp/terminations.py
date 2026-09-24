@@ -1,40 +1,18 @@
-"""Continuous lift-and-hold success, with per-environment reset state."""
+"""Grasp episode failures and the lift-test success check."""
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 import torch
 
 from mjlab.asset_zoo.scenes.workstation import TABLE_CENTER, TABLE_SIZE, TABLE_TOP_Z
-from mjlab.managers.termination_manager import TerminationTermCfg
-from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import stable_hold
+from mjlab.managers.scene_entity_config import SceneEntityCfg
+from mjlab.tasks.ur5e_rh5dg2.grasp.constants import LIFT_HEIGHT
+from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import lift_height
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
-
-
-class LiftSuccess:
-  def __init__(self, cfg: TerminationTermCfg, env: ManagerBasedRlEnv):
-    self.required_steps = math.ceil(cfg.params["hold_time"] / env.step_dt)
-    self.count = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
-    self.last_step = torch.zeros_like(self.count)
-
-  def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
-    ids = slice(None) if env_ids is None else env_ids
-    self.count[ids] = 0
-    self.last_step[ids] = 0
-
-  def __call__(
-    self, env: ManagerBasedRlEnv, height: float, hold_time: float
-  ) -> torch.Tensor:
-    del hold_time
-    advance = env.episode_length_buf != self.last_step
-    next_count = torch.where(stable_hold(env, height), self.count + 1, 0)
-    self.count[:] = torch.where(advance, next_count, self.count)
-    self.last_step[:] = env.episode_length_buf
-    return self.count >= self.required_steps
 
 
 def dropped(env: ManagerBasedRlEnv) -> torch.Tensor:
@@ -46,14 +24,12 @@ def dropped(env: ManagerBasedRlEnv) -> torch.Tensor:
   )
 
 
-def hold_progress(env: ManagerBasedRlEnv) -> torch.Tensor:
-  # Observation dimensions are probed before the termination manager is built.
-  if not hasattr(env, "termination_manager"):
-    return torch.zeros(env.num_envs, device=env.device)
-  term = env.termination_manager.get_term_cfg("success").func
-  assert isinstance(term, LiftSuccess)
-  return (term.count / term.required_steps).clamp(max=1.0)
+def hand_below_table(env: ManagerBasedRlEnv, links: SceneEntityCfg) -> torch.Tensor:
+  """Any hand link origin under the tabletop, as in the reference."""
+  z = env.scene["robot"].data.body_link_pos_w[:, links.body_ids, 2]
+  return (z - env.scene.env_origins[:, None, 2] < TABLE_TOP_Z).any(dim=-1)
 
 
-def success(env: ManagerBasedRlEnv) -> torch.Tensor:
-  return env.termination_manager.get_term("success").float()
+def lifted(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Reference lift-test success: the object rose more than LIFT_HEIGHT."""
+  return (lift_height(env) > LIFT_HEIGHT).float()

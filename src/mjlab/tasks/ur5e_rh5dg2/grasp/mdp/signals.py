@@ -75,3 +75,7 @@ def stable_hold(env: ManagerBasedRlEnv, height: float) -> torch.Tensor:
     & (finger_contacts(env).sum(dim=-1) >= 2)
     & (normal_force(env, "object_table").amax(dim=-1) < FORCE_THRESHOLD)
   )
+
+
+def fingers_in_contact(env: ManagerBasedRlEnv) -> torch.Tensor:
+  return finger_contacts(env).sum(dim=-1).float()

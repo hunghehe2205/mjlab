@@ -33,12 +33,14 @@ class PregraspReset:
     self.object_pos = as_tensor(pool.object_pos)
     self.object_quat = as_tensor(pool.object_quat)
     self.arm_pos = as_tensor(pool.arm_pos)
+    self.lift_pos = as_tensor(pool.lift_pos)
     self.open_hand = as_tensor(OPEN_HAND)
     ids, _ = env.scene["robot"].find_joints(
       ARM_JOINTS + HAND_JOINTS, preserve_order=True
     )
     self.joint_ids = torch.tensor(ids, device=env.device)
     self.object_start = torch.zeros(env.num_envs, 3, device=env.device)
+    self.lift_delta = torch.zeros(env.num_envs, 6, device=env.device)
 
   def __call__(
     self,
@@ -51,7 +53,12 @@ class PregraspReset:
     env_ids = resolve_env_ids(env, env_ids)
     idx = torch.randint(len(self.arm_pos), (len(env_ids),), device=env.device)
     self.write(
-      env, env_ids, self.object_pos[idx], self.object_quat[idx], self.arm_pos[idx]
+      env,
+      env_ids,
+      self.object_pos[idx],
+      self.object_quat[idx],
+      self.arm_pos[idx],
+      self.lift_pos[idx],
     )
 
   def write(
@@ -61,6 +68,7 @@ class PregraspReset:
     object_pos: torch.Tensor,
     object_quat: torch.Tensor,
     arm_pos: torch.Tensor,
+    lift_pos: torch.Tensor,
   ) -> None:
     """Place the object and the open hand; positions are env-local."""
     root = torch.zeros(len(env_ids), 13, device=env.device)
@@ -72,10 +80,20 @@ class PregraspReset:
       joints, torch.zeros_like(joints), joint_ids=self.joint_ids, env_ids=env_ids
     )
     self.object_start[env_ids] = object_pos
+    self.lift_delta[env_ids] = lift_pos - arm_pos
+
+
+def pregrasp_reset(env: ManagerBasedRlEnv) -> PregraspReset:
+  term = env.event_manager.get_term_cfg("reset_pregrasp").func
+  assert isinstance(term, PregraspReset)
+  return term
 
 
 def object_start(env: ManagerBasedRlEnv) -> torch.Tensor:
   """Env-local object position at the last reset."""
-  term = env.event_manager.get_term_cfg("reset_pregrasp").func
-  assert isinstance(term, PregraspReset)
-  return term.object_start
+  return pregrasp_reset(env).object_start
+
+
+def lift_delta(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Arm joint offset that raises the pre-grasp wrist by LIFT_OFFSET."""
+  return pregrasp_reset(env).lift_delta

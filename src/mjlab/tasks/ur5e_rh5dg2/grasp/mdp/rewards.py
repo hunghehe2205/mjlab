@@ -1,4 +1,4 @@
-"""Nonnegative task incentives and costs; signs live in reward weights."""
+"""Nonnegative grasp incentives and costs after RobustDexGrasp; signs live in weights."""
 
 from __future__ import annotations
 
@@ -8,19 +8,36 @@ import torch
 
 from mjlab.asset_zoo.scenes.workstation import TABLE_TOP_Z
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.tasks.ur5e_rh5dg2.grasp.constants import FORCE_THRESHOLD
+from mjlab.sensor import ContactSensor
+from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
+  FORCE_THRESHOLD,
+  GRIP_FORCE,
+  HAND_BODIES,
+)
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.events import object_start
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import (
   box_surface_vectors,
-  finger_contacts,
-  lift_height,
   normal_force,
-  stable_hold,
 )
-from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.terminations import success
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
+
+
+def contact_weights() -> tuple[float, ...]:
+  """Reference finger weights: no palm, fingertips x3, thumb x2, thumb tip x2."""
+  weights = []
+  for name in HAND_BODIES:
+    w = 0.0 if name == "R_hand_palm" else 1.0
+    w *= 3.0 if name.endswith("_dip") else 1.0
+    w *= 2.0 if name.startswith("R_thumb") else 1.0
+    w *= 2.0 if name == "R_thumb_dip" else 1.0
+    weights.append(w)
+  return tuple(w / sum(weights) for w in weights)
+
+
+def _weighted(score: torch.Tensor) -> torch.Tensor:
+  return score @ score.new_tensor(contact_weights())
 
 
 def reach(env: ManagerBasedRlEnv, tips: SceneEntityCfg) -> torch.Tensor:
@@ -31,24 +48,25 @@ def reach(env: ManagerBasedRlEnv, tips: SceneEntityCfg) -> torch.Tensor:
 
 
 def contact(env: ManagerBasedRlEnv) -> torch.Tensor:
-  force = normal_force(env, "hand_object")
-  return (
-    (force > FORCE_THRESHOLD).float() * (0.5 + 0.5 * (force / 5.0).clamp(max=1.0))
-  ).mean(dim=-1)
+  """Weighted fraction of hand links touching the object."""
+  return _weighted((normal_force(env, "hand_object") > FORCE_THRESHOLD).float())
 
 
-def lift(env: ManagerBasedRlEnv, height: float) -> torch.Tensor:
-  support = finger_contacts(env).sum(dim=-1) >= 2
-  return (lift_height(env) / height).clamp(0.0, 1.0) * support
+def grip(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Weighted horizontal contact force, capped per link (thumb cap doubled)."""
+  sensor = env.scene["hand_object_world"]
+  assert isinstance(sensor, ContactSensor) and sensor.data.force is not None
+  cap = torch.tensor(
+    [GRIP_FORCE * (2.0 if n.startswith("R_thumb") else 1.0) for n in HAND_BODIES],
+    device=env.device,
+  )
+  force = sensor.data.force[..., :2].norm(dim=-1)
+  return _weighted(torch.minimum(force, cap) / cap)
 
 
-def hold(env: ManagerBasedRlEnv, height: float) -> torch.Tensor:
-  return stable_hold(env, height).float()
-
-
-def completion(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Cancel manager dt scaling for a one-time terminal bonus."""
-  return success(env) / env.step_dt
+def crash(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Cancel manager dt scaling for a one-time terminal penalty."""
+  return env.termination_manager.get_term("hand_below_table").float() / env.step_dt
 
 
 def height_cost(env: ManagerBasedRlEnv, links: SceneEntityCfg) -> torch.Tensor:
@@ -74,27 +92,38 @@ def undesired_contact(env: ManagerBasedRlEnv) -> torch.Tensor:
   )
 
 
-def horizontal_displacement(env: ManagerBasedRlEnv) -> torch.Tensor:
+def object_displacement(env: ManagerBasedRlEnv) -> torch.Tensor:
   pos = env.scene["object"].data.root_link_pos_w - env.scene.env_origins
-  return (pos[:, :2] - object_start(env)[:, :2]).square().sum(dim=-1)
+  return (pos - object_start(env)).norm(dim=-1)
 
 
-def horizontal_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:
-  return env.scene["object"].data.root_link_lin_vel_w[:, :2].square().sum(dim=-1)
+def object_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:
+  return env.scene["object"].data.root_link_lin_vel_w.square().sum(dim=-1)
 
 
-def joint_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:
-  return env.scene["robot"].data.joint_vel.square().mean(dim=-1)
+def object_angular_velocity(env: ManagerBasedRlEnv) -> torch.Tensor:
+  return env.scene["object"].data.root_link_ang_vel_w.square().sum(dim=-1)
 
 
-def palm_velocity(env: ManagerBasedRlEnv, palm: SceneEntityCfg) -> torch.Tensor:
-  return (
-    env.scene["robot"]
-    .data.body_link_vel_w[:, palm.body_ids]
-    .square()
-    .sum(dim=-1)
-    .mean(dim=-1)
-  )
+def wrist_velocity(env: ManagerBasedRlEnv, palm: SceneEntityCfg) -> torch.Tensor:
+  """Squared palm speed, ten times above 0.25 m/s."""
+  vel = env.scene["robot"].data.body_link_lin_vel_w[:, palm.body_ids].squeeze(1)
+  cost = vel.square().sum(dim=-1)
+  return torch.where(vel.norm(dim=-1) > 0.25, 10.0 * cost, cost)
+
+
+def wrist_angular_velocity(
+  env: ManagerBasedRlEnv, palm: SceneEntityCfg
+) -> torch.Tensor:
+  vel = env.scene["robot"].data.body_link_ang_vel_w[:, palm.body_ids].squeeze(1)
+  return vel.square().sum(dim=-1)
+
+
+def arm_joint_velocity(env: ManagerBasedRlEnv, arm: SceneEntityCfg) -> torch.Tensor:
+  """Squared arm joint speed, amplified four times beyond 0.5 rad/s."""
+  vel = env.scene["robot"].data.joint_vel[:, arm.joint_ids]
+  vel = torch.where(vel.abs() > 0.5, 4.0 * vel, vel)
+  return vel.square().sum(dim=-1)
 
 
 def peak_contact_force(env: ManagerBasedRlEnv) -> torch.Tensor:

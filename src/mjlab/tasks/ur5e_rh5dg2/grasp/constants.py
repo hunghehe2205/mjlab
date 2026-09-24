@@ -1,4 +1,4 @@
-"""Primitive, pre-grasp sampling and hand presets for the teacher baseline."""
+"""Primitive, pre-grasp sampling and hand presets for the grasp-only teacher."""
 
 import math
 
@@ -6,9 +6,16 @@ from mjlab.asset_zoo.scenes.workstation import TABLE_TOP_Z
 
 BOX_SIZE = (0.03, 0.03, 0.06)
 OBJECT_POS = (-0.10, 0.48, TABLE_TOP_Z + BOX_SIZE[2])
+# Grasp-only episodes; the lift test (RobustDexGrasp evaluation) runs after them,
+# ramping the arm while the policy keeps the fingers.
+GRASP_TIME = 4.0
+LIFT_TIME = 4.0
+LIFT_RAMP = 3.0
+LIFT_OFFSET = 0.20
 LIFT_HEIGHT = 0.10
 HOLD_TIME = 3.0
 FORCE_THRESHOLD = 0.1
+GRIP_FORCE = 5.0
 ARM_ACTION_SCALE = 0.10
 HAND_ACTION_SCALE = 0.50
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")

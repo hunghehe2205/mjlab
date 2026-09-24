@@ -38,8 +38,8 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import (
   lift_height,
   normal_force,
   object_speed,
+  stable_hold,
 )
-from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.terminations import LiftSuccess
 from mjlab.tasks.ur5e_rh5dg2.grasp.pregrasp import (
   PregraspSolver,
   box_surface_points,
@@ -291,6 +291,7 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
   cfg = teacher_env_cfg()
   cfg.scene.num_envs = 1
   cfg.auto_reset = False
+  cfg.episode_length_s = 12.0
   env = ManagerBasedRlEnv(cfg, device=device)
   try:
     env.reset()
@@ -307,6 +308,7 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
       as_row(OBJECT_POS),
       as_row(yaw_quat(0.0)),
       as_row(script.approach[0]),
+      as_row(script.approach[0]),
     )
     env.sim.forward()
     ncon = int(wp.to_torch(env.sim.wp_data.nacon)[0].item())
@@ -316,6 +318,8 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
     action = env.action_manager.get_term("joint_pos")
     assert isinstance(action, GraspAction)
     audit = RolloutAudit()
+    required = math.ceil(HOLD_TIME / env.step_dt)
+    count = 0
     for step in range(env.max_episode_length):
       goal = torch.tensor(
         script.target(step * env.step_dt), device=device, dtype=torch.float32
@@ -331,18 +335,16 @@ def run_warp_probe(device: str = "cpu") -> ProbeResult:
         approach=step * env.step_dt < APPROACH_END,
         hand_force=normal_force(env, "hand_object").max().item(),
       )
-      if (terminated | truncated).any():
+      count = count + 1 if stable_hold(env, LIFT_HEIGHT).item() else 0
+      if count >= required or (terminated | truncated).any():
         break
-    success = env.termination_manager.get_term("success").item()
-    hold = env.termination_manager.get_term_cfg("success").func
-    assert isinstance(hold, LiftSuccess)
     return ProbeResult(
       "warp",
       device,
-      bool(success) and initial < 1e-5 and audit.passed,
+      count >= required and initial < 1e-5 and audit.passed,
       initial,
       lift_height(env).item(),
-      hold.count.item() * env.step_dt,
+      count * env.step_dt,
       object_speed(env).item(),
       normal_force(env, "hand_object").max().item(),
       audit,

@@ -14,7 +14,6 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import (
   box_surface_vectors,
   normal_force,
 )
-from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.terminations import hold_progress
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -58,7 +57,6 @@ def teacher_state(
       obj.root_link_vel_w,
       contacts,
       torch.log1p(force.clamp(max=20.0)),
-      hold_progress(env).unsqueeze(-1),
     ],
     dim=-1,
   )
