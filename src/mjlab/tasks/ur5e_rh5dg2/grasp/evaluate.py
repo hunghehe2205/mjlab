@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Callable
+import random
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from mjlab.envs import ManagerBasedRlEnv
@@ -28,11 +31,26 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.teacher_env_cfg import (
 from mjlab.utils.os import get_wandb_checkpoint_path
 
 
-def lift_test_env(num_envs: int, device: str) -> RslRlVecEnvWrapper:
+@contextmanager
+def preserved_rng() -> Iterator[None]:
+  """Restore the Python, NumPy and Torch CPU/CUDA generators on exit."""
+  python, numpy = random.getstate(), np.random.get_state()
+  with torch.random.fork_rng(devices=range(torch.cuda.device_count())):
+    try:
+      yield
+    finally:
+      random.setstate(python)
+      np.random.set_state(numpy)
+
+
+def lift_test_env(num_envs: int, device: str, seed: int = 0) -> RslRlVecEnvWrapper:
+  """Seeds the pre-grasp pool so every call sees the same placements."""
   cfg = teacher_env_cfg(lift_test=True)
   cfg.scene.num_envs = num_envs
-  env = ManagerBasedRlEnv(cfg, device=device)
-  return RslRlVecEnvWrapper(env, clip_actions=teacher_ppo_cfg().clip_actions)
+  cfg.seed = seed
+  with preserved_rng():
+    env = ManagerBasedRlEnv(cfg, device=device)
+    return RslRlVecEnvWrapper(env, clip_actions=teacher_ppo_cfg().clip_actions)
 
 
 def run_lift_test(
@@ -41,13 +59,12 @@ def run_lift_test(
   """One grasp-then-lift episode per env with deterministic actions."""
   env = vec_env.unwrapped
   device = torch.device(env.device)
-  devices = [device.index or 0] if device.type == "cuda" else []
   grasp_steps = round(GRASP_TIME / env.step_dt)
   n = env.num_envs
   failed = torch.zeros(n, dtype=torch.bool, device=device)
   fingers = displacement = load = torch.zeros(n, device=device)
   # Same placements and delays for every call, without disturbing training RNG.
-  with torch.random.fork_rng(devices=devices), torch.no_grad():
+  with preserved_rng(), torch.no_grad():
     torch.manual_seed(seed)
     obs, _ = vec_env.reset()
     # Stop one step short of the time limit so auto-reset keeps the final state.
@@ -72,7 +89,7 @@ def run_lift_test(
 def evaluate(
   checkpoint: Path, num_envs: int, device: str, seed: int = 0
 ) -> dict[str, float]:
-  vec_env = lift_test_env(num_envs, device)
+  vec_env = lift_test_env(num_envs, device, seed)
   try:
     runner = MjlabOnPolicyRunner(vec_env, asdict(teacher_ppo_cfg()), device=device)
     runner.load(

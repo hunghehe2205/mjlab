@@ -21,6 +21,7 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   OBJECT_MAX_ABS_X,
   OBJECT_POS,
 )
+from mjlab.tasks.ur5e_rh5dg2.grasp.evaluate import lift_test_env
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp import events, rewards, signals, terminations
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.actions import GraspAction
 from mjlab.tasks.ur5e_rh5dg2.grasp.physics_probe import (
@@ -238,6 +239,26 @@ def test_lift_test_ramps_arm_after_grasp_phase():
     assert "success" in env.cfg.metrics
   finally:
     env.close()
+
+
+def test_lift_test_env_fixes_placements_and_keeps_training_rng():
+  def draw() -> tuple[float, float]:
+    return np.random.rand(), torch.rand(1).item()
+
+  np.random.seed(1)
+  torch.manual_seed(1)
+  expected = draw()
+  np.random.seed(1)
+  torch.manual_seed(1)
+  envs = [lift_test_env(1, get_test_device(), seed=3) for _ in range(2)]
+  try:
+    assert draw() == expected
+    pools = [events.pregrasp_reset(e.unwrapped) for e in envs]
+    assert torch.equal(pools[0].object_pos, pools[1].object_pos)
+    assert torch.equal(pools[0].arm_pos, pools[1].arm_pos)
+  finally:
+    for e in envs:
+      e.unwrapped.close()
 
 
 def test_partial_reset_restores_object_and_clears_contacts(env):
