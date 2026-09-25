@@ -16,6 +16,10 @@ LIFT_HEIGHT = 0.10
 HOLD_TIME = 3.0
 FORCE_THRESHOLD = 0.1
 GRIP_FORCE = 5.0
+# Object-table load above the box weight (0.78 N) is pressing; cost per 10 N.
+PUSH_FORCE = 1.0
+PUSH_SCALE = 10.0
+LIFT_TEST_ENVS = 256
 # Targets accumulate per 0.05 s step (reference: 0.005/0.015 rad per 0.2 s step,
 # raised so the 6 cm approach fits a 4 s episode). The target may lead the joint by
 # at most the offsets, which bound the grasp preload.
@@ -55,7 +59,10 @@ OBJECT_DISTANCE = (0.45, 0.75)
 OBJECT_MAX_ABS_X = 0.25
 CAMERA_POS = (-0.035, 0.58, 1.531)
 TOP_GRASP = True
-# The paper starts 0.25 m away; starting 2 cm above the box focuses on grasping.
+# The paper starts 0.25 m away. Resets start at pre-close (box between thumb and
+# fingers) raised by up to 3 cm, so the policy learns to close rather than to
+# press on the box top; the scripted probe approaches from 6 cm.
+PREGRASP_STANDOFF = (0.0, 0.03)
 STANDOFF = 0.06
 NUM_ROLLS = 10
 GRASP_WIDTH_LIMIT = 0.18

@@ -35,7 +35,6 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   HAND_MAX_OFFSET,
   LIFT_RAMP,
   LIFT_TIME,
-  MIN_ACTION_STD,
   OBJECT_POS,
   OPEN_HAND,
   POOL_SIZE,
@@ -115,6 +114,13 @@ def teacher_env_cfg(
       secondary_policy="error",
     ),
     ContactSensorCfg(
+      name="object_table_net",
+      primary=object_match,
+      secondary=ContactMatch(mode="body", pattern="table", entity="props"),
+      secondary_policy="error",
+      reduce="netforce",
+    ),
+    ContactSensorCfg(
       name="robot_table",
       primary=ContactMatch(mode="subtree", pattern="base", entity="robot"),
       secondary=ContactMatch(mode="body", pattern="table", entity="props"),
@@ -192,6 +198,7 @@ def teacher_env_cfg(
     rewards={
       "contact": RewardTermCfg(func=rewards.contact, weight=1.5),
       "grip": RewardTermCfg(func=rewards.grip, weight=1.0),
+      "push": RewardTermCfg(func=rewards.push, weight=-1.0),
       "distance": RewardTermCfg(
         func=rewards.distance, weight=-0.5, params={"anchors": anchors}
       ),
@@ -232,6 +239,7 @@ def teacher_env_cfg(
         func=rewards.object_displacement, reduce="last"
       ),
       "object_speed": MetricsTermCfg(func=signals.object_speed),
+      "table_load": MetricsTermCfg(func=signals.table_load, reduce="last"),
       "contact_force": MetricsTermCfg(func=rewards.peak_contact_force, reduce="max"),
       **(
         {
@@ -266,10 +274,9 @@ def teacher_ppo_cfg() -> RslRlOnPolicyRunnerCfg:
   cfg = ur5e_rh5dg2_ppo_runner_cfg()
   cfg.actor.hidden_dims = (128, 128)
   cfg.critic.hidden_dims = (128, 128)
-  assert cfg.actor.distribution_cfg is not None
-  cfg.actor.distribution_cfg["std_range"] = (MIN_ACTION_STD, 1e6)
   cfg.algorithm.gamma = 0.996
   cfg.algorithm.entropy_coef = 0.0
+  cfg.algorithm.class_name = "mjlab.tasks.ur5e_rh5dg2.grasp.runner:FlooredPPO"
   cfg.algorithm.learning_rate = 3e-4
   cfg.algorithm.value_loss_coef = 0.5
   cfg.algorithm.max_grad_norm = 0.5

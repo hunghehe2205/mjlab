@@ -30,9 +30,13 @@ actions. A scripted close/lift probe remains the physics acceptance check.
     toward the object and +Z = finger axis; 10 finger-axis rolls over the half
     plane facing away from the robot.
   - The grasp reference `HAND_CENTER` = (0.125, 0.005, 0.190) m in the wrist
-    frame (box center at pre-close) is placed 0.06 m from the affordance center
-    along the approach (the reference uses 0.25 m). The thumb tip then starts
-    about 2 cm above the box top, so training focuses on grasping, not reaching.
+    frame (box center at pre-close) is placed 0-3 cm (uniform per pool entry)
+    from the affordance center along the approach; the reference uses 0.25 m.
+    The box then starts between the thumb and the fingers (thumb tip about
+    1.5 cm below the box top), so the policy learns to close and squeeze. With
+    the earlier 6 cm standoff the thumb started 2 cm above the box and every
+    policy settled on pressing the palm onto the box top (run gw516bud). The
+    scripted probe still approaches from 6 cm.
   - Damped least-squares IK per roll, seeded from a collision-free palm-down
     branch and rejected outside the 0.9 soft limits. Score = 5 x grasp width +
     |wrist_2 - π/2| + 0.5(|wrist_2| - 3.2) among widths below 0.18 m.
@@ -142,7 +146,8 @@ nonnegative cost and has a negative weight.
 | Term | Weight | Reference term (coeff) |
 | --- | ---: | --- |
 | Weighted fraction of hand links touching the object | 1.5 | affordance_contact (1.5) |
-| Weighted horizontal contact force, capped 5 N per link (thumb 10 N) | 1.0 | affordance_impulse, x-y impulse clipped (1.0) |
+| Opposed horizontal squeeze: min(thumb, finger force sums), capped 5 N, times max(0, -cos) of their directions | 1.0 | affordance_impulse, x-y impulse clipped (1.0) |
+| Object-table load above 1 N, per 10 N, capped at 5 | -1 | push_reward (vertical hand impulse; coefficient 0 in the public config) |
 | Weighted hand-link distance to the box surface, x17 links | -0.5 | affordance_reward (-0.5 x weighted joint distance x16, computed in `train.py`) |
 | Hand link below the tabletop: terminate | -1 once | terminal reward -10, overwritten in `train.py` |
 | Hand anchor clearance below 2 cm | -0.1 | table_reward, arm_height (-0.03, -0.05) |
@@ -174,11 +179,13 @@ object dropped off the table (not in the reference) and the time limit.
 The lift test episode is GRASP_TIME + 4 s. Success: object rise > 0.10 m at the
 end, with no earlier termination (the reference checks `obj z - z0 > 0.1` after
 its lift phase). `grasp/evaluate.py` runs it over uniformly sampled placements and
-reports the success rate, mean rise, fingers in contact and object displacement at
-the end of the grasp phase.
+reports the success rate, mean rise, and fingers in contact, object displacement
+and object-table load at the end of the grasp phase. `--seed` fixes placements
+and actuation delays. The training runner runs the same test on 256 envs with
+seed 0 at every checkpoint save and logs it under `Lift_Test/`.
 
-Training logs every weighted reward, fingers in contact and object displacement at
-the end of the episode, object speed and peak contact force. Tests cover finite
+Training logs every weighted reward, fingers in contact, object displacement and
+object-table load at the end of the episode, object speed and peak contact force. Tests cover finite
 observations, translation invariance, target holding/clipping/reset, reward signs
 and weights, the lift-test arm ramp, partial resets and actual sensor response to
 contact.
@@ -188,8 +195,10 @@ contact.
 PPO: actor/critic MLP 128x128, gamma 0.996, lambda 0.95, learning rate 3e-4,
 4 epochs x 4 mini-batches, clip 0.2, value coefficient 0.5, max grad norm 0.5,
 adaptive KL 0.01, entropy 0.0, observation normalization, rollout 64 steps.
-Action std starts at 1.0 and is floored at 0.2, as the reference's
-`enforce_minimum_std`. The hand must be able to preload against contact: a 0.10
+Action std starts at 1.0 and is projected onto a 0.2 floor after every update
+(`FlooredPPO`), as the reference's `enforce_minimum_std`. A clamp inside the
+distribution's forward pass (rsl_rl `std_range`, used in run gw516bud) zeroes the
+gradient of any std below the floor, so those dimensions could never grow again. The hand must be able to preload against contact: a 0.10
 rad lead failed the initial physical probe, so the hand target may lead q by up to
 0.50 rad.
 

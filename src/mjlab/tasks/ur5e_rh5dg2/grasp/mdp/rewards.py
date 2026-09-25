@@ -13,11 +13,14 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   FORCE_THRESHOLD,
   GRIP_FORCE,
   HAND_BODIES,
+  PUSH_FORCE,
+  PUSH_SCALE,
 )
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.events import object_start
 from mjlab.tasks.ur5e_rh5dg2.grasp.mdp.signals import (
   box_surface_vectors,
   normal_force,
+  table_load,
 )
 
 if TYPE_CHECKING:
@@ -64,16 +67,30 @@ def contact(env: ManagerBasedRlEnv) -> torch.Tensor:
   return _weighted((normal_force(env, "hand_object") > FORCE_THRESHOLD).float())
 
 
+def opposed_squeeze(thumb: torch.Tensor, fingers: torch.Tensor) -> torch.Tensor:
+  """Horizontal squeeze between two force sums, zero unless they oppose."""
+  thumb_norm, fingers_norm = thumb.norm(dim=-1), fingers.norm(dim=-1)
+  cosine = (thumb * fingers).sum(dim=-1) / (thumb_norm * fingers_norm + 1e-6)
+  squeeze = torch.minimum(thumb_norm, fingers_norm).clamp(max=GRIP_FORCE)
+  return (-cosine).clamp(min=0.0) * squeeze / GRIP_FORCE
+
+
 def grip(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Weighted horizontal contact force, capped per link (thumb cap doubled)."""
+  """Thumb against the other fingers in the horizontal plane (reference: x-y impulse)."""
   sensor = env.scene["hand_object_world"]
   assert isinstance(sensor, ContactSensor) and sensor.data.force is not None
-  cap = torch.tensor(
-    [GRIP_FORCE * (2.0 if n.startswith("R_thumb") else 1.0) for n in HAND_BODIES],
-    device=env.device,
+  force = sensor.data.force[..., :2]
+  thumb = torch.tensor([n.startswith("R_thumb") for n in HAND_BODIES])
+  fingers = ~thumb & torch.tensor([n != "R_hand_palm" for n in HAND_BODIES])
+  return opposed_squeeze(
+    force[:, thumb.to(env.device)].sum(dim=1),
+    force[:, fingers.to(env.device)].sum(dim=1),
   )
-  force = sensor.data.force[..., :2].norm(dim=-1)
-  return _weighted(torch.minimum(force, cap) / cap)
+
+
+def push(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Object-table load beyond the box weight, i.e. the hand pressing the box down."""
+  return ((table_load(env) - PUSH_FORCE).clamp(min=0.0) / PUSH_SCALE).clamp(max=5.0)
 
 
 def crash(env: ManagerBasedRlEnv) -> torch.Tensor:

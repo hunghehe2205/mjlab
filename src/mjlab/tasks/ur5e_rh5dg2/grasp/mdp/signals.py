@@ -79,3 +79,10 @@ def stable_hold(env: ManagerBasedRlEnv, height: float) -> torch.Tensor:
 
 def fingers_in_contact(env: ManagerBasedRlEnv) -> torch.Tensor:
   return finger_contacts(env).sum(dim=-1).float()
+
+
+def table_load(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Net object-table contact force; the box weight alone is 0.78 N."""
+  sensor = env.scene["object_table_net"]
+  assert isinstance(sensor, ContactSensor) and sensor.data.force is not None
+  return sensor.data.force.norm(dim=-1).sum(dim=-1)

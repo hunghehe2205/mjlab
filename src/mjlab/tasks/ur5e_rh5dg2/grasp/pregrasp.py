@@ -30,6 +30,7 @@ from mjlab.tasks.ur5e_rh5dg2.grasp.constants import (
   OBJECT_POS,
   OPEN_HAND,
   PREGRASP_CLEARANCE,
+  PREGRASP_STANDOFF,
   STANDOFF,
   TOP_GRASP,
 )
@@ -224,7 +225,11 @@ class PregraspSolver:
     return seed
 
   def solve(
-    self, pos: np.ndarray, quat: np.ndarray, surface: np.ndarray
+    self,
+    pos: np.ndarray,
+    quat: np.ndarray,
+    surface: np.ndarray,
+    standoff: float = STANDOFF,
   ) -> Pregrasp | None:
     """Best collision-free pre-grasp for one object placement."""
     rotation = np.zeros(9)
@@ -238,7 +243,7 @@ class PregraspSolver:
     seed = self.seed(pos)
     up = np.array([0.0, 0.0, LIFT_OFFSET])
     for rot, width in zip(rotations, widths, strict=True):
-      q = self.ik(self.wrist_pose(center, rot, STANDOFF), rot, seed)
+      q = self.ik(self.wrist_pose(center, rot, standoff), rot, seed)
       if q is None or self.collides(q, pos, quat):
         continue
       if widths.min() >= GRASP_WIDTH_LIMIT:
@@ -253,7 +258,7 @@ class PregraspSolver:
         continue
       if score >= best_score:
         continue
-      lift = self.ik(self.wrist_pose(center, rot, STANDOFF) + up, rot, q)
+      lift = self.ik(self.wrist_pose(center, rot, standoff) + up, rot, q)
       if lift is not None:
         best, best_score = Pregrasp(q, rot, center, lift), score
     return best
@@ -272,7 +277,7 @@ def build_pool(
     xy = sample_object_xy(rng, edge_biased and rng.random() < 0.5)
     p = np.array([xy[0], xy[1], z])
     q = yaw_quat(rng.uniform(-np.pi, np.pi))
-    solution = solver.solve(p, q, surface)
+    solution = solver.solve(p, q, surface, rng.uniform(*PREGRASP_STANDOFF))
     if solution is None:
       continue
     pos.append(p)

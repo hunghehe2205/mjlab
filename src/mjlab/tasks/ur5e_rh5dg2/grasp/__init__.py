@@ -1,4 +1,5 @@
 from mjlab.tasks.registry import register_mjlab_task
+from mjlab.tasks.ur5e_rh5dg2.grasp.runner import GraspTeacherRunner
 from mjlab.tasks.ur5e_rh5dg2.grasp.teacher_env_cfg import (
   teacher_env_cfg,
   teacher_ppo_cfg,
@@ -9,4 +10,5 @@ register_mjlab_task(
   env_cfg=teacher_env_cfg(),
   play_env_cfg=teacher_env_cfg(play=True),
   rl_cfg=teacher_ppo_cfg(),
+  runner_cls=GraspTeacherRunner,
 )

@@ -87,6 +87,13 @@ def test_translated_env_observations_and_steps(env):
   assert (signals.normal_force(env, "object_table") > 0.1).all()
   assert not signals.finger_contacts(env).any()
   assert not env.termination_manager.terminated.any()
+  torch.testing.assert_close(
+    signals.table_load(env),
+    torch.full((2,), 0.08 * 9.81, device=env.device),
+    atol=0.05,
+    rtol=0,
+  )
+  assert (rewards.push(env) == 0).all()
 
 
 def test_action_target_accumulates_held_delayed_and_partial_reset(env):
@@ -155,6 +162,11 @@ def test_reward_signs_weights_and_lift_check(env):
   assert cost[-1] == 0
   for name, cfg in env.cfg.rewards.items():
     assert (cfg.weight > 0) == (name in ("contact", "grip")), name
+  thumb = torch.tensor([[3.0, 0.0], [-2.0, 0.0], [0.0, 3.0], [1.0, 0.0]])
+  fingers = torch.tensor([[-4.0, 0.0], [-9.0, 0.0], [3.0, 0.0], [-1.0, 0.0]])
+  torch.testing.assert_close(
+    rewards.opposed_squeeze(thumb, fingers), torch.tensor([0.6, 0.0, 0.0, 0.2])
+  )
   for weights in (rewards.contact_weights(), rewards.distance_weights()):
     assert weights[0] == 0 and math.isclose(sum(weights), 1.0)
   assert "lift_height" not in env.cfg.metrics
@@ -171,6 +183,7 @@ def test_reward_signs_weights_and_lift_check(env):
   )
   assert terminations.lifted(env).all()
   assert rewards.contact(env).eq(0).all() and rewards.grip(env).eq(0).all()
+  assert rewards.push(env).eq(0).all()
 
 
 def test_contact_sensor_reads_live_warp_state(env):
