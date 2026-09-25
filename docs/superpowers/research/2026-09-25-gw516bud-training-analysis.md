@@ -119,10 +119,6 @@ Scale hiện tại arm/hand = 0,01/0,03 rad/bước, reference = 0,005/0,015.
 Không thể coi hai controller tương đương hay copy nguyên hệ số giữa chúng.
 [Reference controller](https://github.com/zdchan/RobustDexGrasp/blob/main/raisimGymTorch/raisimGymTorch/env/envs/allegro_teacher/Environment.hpp).
 
-Review `2026-09-24-teacher-model-review.md` mô tả phiên bản cũ có
-policy-controlled lift/hold, 259 inputs và chưa có std floor. Không dùng
-các nhận xét đó như mô tả của run này.
-
 **Thứ tự công việc đề xuất**
 
 1. Đánh giá checkpoint 1000, 2000, 3000, 4000, 4999 trên cùng một tập

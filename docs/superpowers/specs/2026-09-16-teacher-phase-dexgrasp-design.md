@@ -227,7 +227,9 @@ throughput or learning convergence. No training-success claim without a run.
 
 Play runs the lift test with the repository's unlimited-time convention: the arm
 raises at 4 s and then keeps holding. The physics probe keeps its own
-12-second rollout and 3 s hold check.
+14-second rollout and 3 s hold check.
 
-Measured results and remaining limits are recorded in
-[the validation report](../research/2026-09-20-teacher-physics-validation.md).
+Rationale for the grasp-only framing is in
+[the reframe note](../research/2026-09-24-grasp-only-reframe.md); the latest
+training diagnosis is in
+[the gw516bud analysis](../research/2026-09-25-gw516bud-training-analysis.md).
